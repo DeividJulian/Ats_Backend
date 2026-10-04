@@ -2,10 +2,11 @@ from collections import Counter
 
 from fastapi import APIRouter
 
-from schemas.nlp import AnalisisTexto, TextoEntrada
+from schemas.nlp import AnalisisTexto, ComparacionEntrada, ComparacionSalida, TextoEntrada
 from services.habilidades import extraer_habilidades
 from services.nlp import tokenizar
 from services.perfil import extraer_anios_experiencia, extraer_nivel_educacion
+from services.similitud import similitud_coseno
 
 router = APIRouter(prefix="/nlp", tags=["NLP"])
 
@@ -20,3 +21,9 @@ def analizar_texto(entrada: TextoEntrada):
         nivel_educacion=extraer_nivel_educacion(entrada.texto),
         terminos_clave=[t for t, _ in frecuencias.most_common(8)],
     )
+
+
+@router.post("/similitud", response_model=ComparacionSalida)
+def comparar_textos(entrada: ComparacionEntrada):
+    """Similitud semántica léxica (TF-IDF + coseno) entre dos textos, de 0 a 1."""
+    return ComparacionSalida(similitud=similitud_coseno(entrada.texto_a, entrada.texto_b))

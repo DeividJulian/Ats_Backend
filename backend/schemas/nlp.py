@@ -14,3 +14,12 @@ class AnalisisTexto(BaseModel):
     anios_experiencia: int
     nivel_educacion: str | None
     terminos_clave: list[str]
+
+
+class ComparacionEntrada(BaseModel):
+    texto_a: TextoLargo
+    texto_b: TextoLargo
+
+
+class ComparacionSalida(BaseModel):
+    similitud: float
