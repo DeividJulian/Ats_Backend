@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import Session
 
 from database import get_db
 from models.application import Application
+from models.candidate import Candidate
 from models.job import Job
-from schemas.application import ApplicationOut, RankingItem
+from schemas.application import ApplicationOut, RankingItem, Suggestion
 from services.matching import evaluate, system_corpus
 
 router = APIRouter(tags=["Ranking"])
@@ -75,3 +76,38 @@ def recalculate_ranking(job_id: int = JobId, db: Session = Depends(get_db)):
         a.details = result
     db.commit()
     return {"mensaje": "Ranking recalculado", "postulaciones_actualizadas": len(applications)}
+
+
+@router.get(
+    "/vacantes/{vacante_id}/candidatos-sugeridos", response_model=list[Suggestion], summary="Candidatos sugeridos"
+)
+def suggested_candidates(
+    job_id: int = JobId,
+    limit: int = Query(default=5, ge=1, le=50, alias="limite"),
+    min_score: float = Query(default=0, ge=0, le=100, alias="score_minimo"),
+    db: Session = Depends(get_db),
+):
+    """Recomienda candidatos de la base que todavía NO se han postulado, ordenados por ajuste."""
+    job = _job_or_404(db, job_id)
+    already_applied = {a.candidate_id for a in db.query(Application).filter(Application.job_id == job_id)}
+    corpus = system_corpus(db)
+
+    suggestions = []
+    for candidate in db.query(Candidate).all():
+        if candidate.id in already_applied:
+            continue
+        r = evaluate(db, job, candidate, corpus)
+        if r["score"] >= min_score:
+            suggestions.append(
+                Suggestion(
+                    candidate_id=candidate.id,
+                    name=candidate.name,
+                    email=candidate.email,
+                    score=r["score"],
+                    classification=r["clasificacion"],
+                    matching_skills=r["habilidades_coincidentes"],
+                    missing_skills=r["habilidades_faltantes"],
+                )
+            )
+    suggestions.sort(key=lambda s: s.score, reverse=True)
+    return suggestions[:limit]
