@@ -5,8 +5,9 @@ from database import get_db
 from models.application import Application
 from models.candidate import Candidate
 from models.job import Job
-from schemas.application import ApplicationCreate, ApplicationOut
+from schemas.application import ApplicationCreate, ApplicationOut, ApplicationStatus
 from services.matching import evaluate
+from services.pipeline import is_valid_transition, next_statuses
 
 router = APIRouter(prefix="/postulaciones", tags=["Postulaciones"])
 
@@ -72,6 +73,22 @@ def list_applications(
 @router.get("/{postulacion_id}", response_model=ApplicationOut, summary="Obtener postulación")
 def get_application(application_id: int = ApplicationId, db: Session = Depends(get_db)):
     return get_application_or_404(db, application_id)
+
+
+@router.patch("/{postulacion_id}/estado", response_model=ApplicationOut, summary="Cambiar estado de la postulación")
+def change_status(data: ApplicationStatus, application_id: int = ApplicationId, db: Session = Depends(get_db)):
+    """Avanza la postulación en el flujo: nuevo, preseleccionado, entrevista, oferta, contratado (o rechazado)."""
+    application = get_application_or_404(db, application_id)
+    if not is_valid_transition(application.status, data.status):
+        allowed = next_statuses(application.status)
+        detail = f"No se puede pasar de '{application.status}' a '{data.status}'. " + (
+            f"Estados permitidos: {', '.join(allowed)}." if allowed else "Este estado es final."
+        )
+        raise HTTPException(status_code=409, detail=detail)
+    application.status = data.status
+    db.commit()
+    db.refresh(application)
+    return application
 
 
 @router.delete("/{postulacion_id}", summary="Retirar postulación")
