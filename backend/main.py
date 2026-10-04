@@ -4,7 +4,7 @@ import pkgutil
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-import models  # noqa: F401  (registra todas las tablas)
+import models  # noqa: F401  (registers every table)
 import routers
 from database import Base, engine
 
@@ -20,18 +20,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Registra automáticamente cada archivo de la carpeta routers/ que defina `router`
-for _, nombre_modulo, _ in pkgutil.iter_modules(routers.__path__):
-    modulo = importlib.import_module(f"routers.{nombre_modulo}")
-    if hasattr(modulo, "router"):
-        app.include_router(modulo.router)
+# Automatically register every module in routers/ that defines `router`
+for _, module_name, _ in pkgutil.iter_modules(routers.__path__):
+    module = importlib.import_module(f"routers.{module_name}")
+    if hasattr(module, "router"):
+        app.include_router(module.router)
 
 
-@app.get("/", tags=["Sistema"])
-def raiz():
+@app.get("/", tags=["Sistema"], summary="Inicio")
+def root():
     return {"mensaje": "API del Portal ATS funcionando"}
 
 
-@app.get("/health", tags=["Sistema"])
+@app.get("/health", tags=["Sistema"], summary="Estado del servicio")
 def health():
     return {"status": "ok"}

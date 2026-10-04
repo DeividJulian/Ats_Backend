@@ -1,25 +1,36 @@
 from typing import Annotated
 
-from pydantic import BaseModel, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-TextoLargo = Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=20000)]
+LongText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=20000)]
 
-
-class TextoEntrada(BaseModel):
-    texto: TextoLargo
-
-
-class AnalisisTexto(BaseModel):
-    habilidades: list[str]
-    anios_experiencia: int
-    nivel_educacion: str | None
-    terminos_clave: list[str]
+# Attributes are in English; the aliases are the Spanish field names the API exposes
+SPANISH_ALIASES = ConfigDict(validate_by_name=True, validate_by_alias=True, serialize_by_alias=True)
 
 
-class ComparacionEntrada(BaseModel):
-    texto_a: TextoLargo
-    texto_b: TextoLargo
+class TextInput(BaseModel):
+    model_config = SPANISH_ALIASES
+
+    text: LongText = Field(alias="texto")
 
 
-class ComparacionSalida(BaseModel):
-    similitud: float
+class TextAnalysis(BaseModel):
+    model_config = SPANISH_ALIASES
+
+    skills: list[str] = Field(alias="habilidades")
+    experience_years: int = Field(alias="anios_experiencia")
+    education_level: str | None = Field(alias="nivel_educacion")
+    key_terms: list[str] = Field(alias="terminos_clave")
+
+
+class ComparisonInput(BaseModel):
+    model_config = SPANISH_ALIASES
+
+    text_a: LongText = Field(alias="texto_a")
+    text_b: LongText = Field(alias="texto_b")
+
+
+class ComparisonOutput(BaseModel):
+    model_config = SPANISH_ALIASES
+
+    similarity: float = Field(alias="similitud")

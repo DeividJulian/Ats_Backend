@@ -2,28 +2,28 @@ from collections import Counter
 
 from fastapi import APIRouter
 
-from schemas.nlp import AnalisisTexto, ComparacionEntrada, ComparacionSalida, TextoEntrada
-from services.habilidades import extraer_habilidades
-from services.nlp import tokenizar
-from services.perfil import extraer_anios_experiencia, extraer_nivel_educacion
-from services.similitud import similitud_coseno
+from schemas.nlp import ComparisonInput, ComparisonOutput, TextAnalysis, TextInput
+from services.nlp import tokenize
+from services.profile import extract_education_level, extract_experience_years
+from services.similarity import cosine_similarity
+from services.skills import extract_skills
 
 router = APIRouter(prefix="/nlp", tags=["NLP"])
 
 
-@router.post("/analizar-texto", response_model=AnalisisTexto)
-def analizar_texto(entrada: TextoEntrada):
+@router.post("/analizar-texto", response_model=TextAnalysis, summary="Analizar texto")
+def analyze_text(data: TextInput):
     """Extrae habilidades, experiencia y nivel educativo de cualquier texto (hoja de vida o vacante)."""
-    frecuencias = Counter(tokenizar(entrada.texto))
-    return AnalisisTexto(
-        habilidades=extraer_habilidades(entrada.texto),
-        anios_experiencia=extraer_anios_experiencia(entrada.texto),
-        nivel_educacion=extraer_nivel_educacion(entrada.texto),
-        terminos_clave=[t for t, _ in frecuencias.most_common(8)],
+    frequencies = Counter(tokenize(data.text))
+    return TextAnalysis(
+        skills=extract_skills(data.text),
+        experience_years=extract_experience_years(data.text),
+        education_level=extract_education_level(data.text),
+        key_terms=[t for t, _ in frequencies.most_common(8)],
     )
 
 
-@router.post("/similitud", response_model=ComparacionSalida)
-def comparar_textos(entrada: ComparacionEntrada):
+@router.post("/similitud", response_model=ComparisonOutput, summary="Comparar textos")
+def compare_texts(data: ComparisonInput):
     """Similitud semántica léxica (TF-IDF + coseno) entre dos textos, de 0 a 1."""
-    return ComparacionSalida(similitud=similitud_coseno(entrada.texto_a, entrada.texto_b))
+    return ComparisonOutput(similarity=cosine_similarity(data.text_a, data.text_b))

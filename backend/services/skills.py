@@ -1,11 +1,11 @@
-"""Extracción de habilidades a partir de texto libre usando un catálogo de sinónimos."""
+"""Extracts skills from free text using a synonym catalog."""
 import re
 
-from services.nlp import normalizar
+from services.nlp import normalize
 
-# habilidad canónica -> sinónimos con los que suele aparecer en una hoja de vida
-CATALOGO: dict[str, list[str]] = {
-    # Tecnología
+# canonical skill -> synonyms it usually appears as in a resume
+CATALOG: dict[str, list[str]] = {
+    # Technology
     "python": ["python"],
     "java": ["java"],
     "javascript": ["javascript", "js"],
@@ -37,7 +37,7 @@ CATALOGO: dict[str, list[str]] = {
     "power bi": ["power bi", "powerbi"],
     "tableau": ["tableau"],
     "pruebas de software": ["pruebas de software", "testing", "qa", "pytest", "pruebas unitarias"],
-    # Oficina, administración y finanzas
+    # Office, administration and finance
     "excel": ["excel", "hojas de calculo"],
     "word": ["word"],
     "power point": ["power point", "powerpoint"],
@@ -51,7 +51,7 @@ CATALOGO: dict[str, list[str]] = {
     "inventarios": ["inventarios", "control de inventario", "gestion de inventarios"],
     "logistica": ["logistica", "cadena de suministro"],
     "compras": ["compras", "proveedores"],
-    # Comercial y marketing
+    # Sales and marketing
     "ventas": ["ventas", "venta consultiva", "gestion comercial"],
     "atencion al cliente": ["atencion al cliente", "servicio al cliente", "servicio al usuario"],
     "negociacion": ["negociacion", "negociar"],
@@ -60,7 +60,7 @@ CATALOGO: dict[str, list[str]] = {
     "redes sociales": ["redes sociales", "community manager", "social media"],
     "seo": ["seo", "posicionamiento web"],
     "diseno grafico": ["diseno grafico", "photoshop", "illustrator", "canva"],
-    # Habilidades blandas y gestión
+    # Soft skills and management
     "gestion de proyectos": ["gestion de proyectos", "project management", "pmp"],
     "scrum": ["scrum", "metodologias agiles", "agile", "kanban"],
     "liderazgo": ["liderazgo", "liderar equipos", "lidere equipos", "manejo de equipos"],
@@ -71,33 +71,33 @@ CATALOGO: dict[str, list[str]] = {
 }
 
 
-def _compilar() -> list[tuple[str, re.Pattern]]:
-    patrones = []
-    for canonica, sinonimos in CATALOGO.items():
-        for s in sinonimos:
-            # El lookaround evita que "java" coincida dentro de "javascript" o "sql" dentro de "postgresql"
-            patron = re.compile(r"(?<![a-z0-9+#.])" + re.escape(normalizar(s)) + r"(?![a-z0-9+#])")
-            patrones.append((canonica, patron))
-    return patrones
+def _compile() -> list[tuple[str, re.Pattern]]:
+    patterns = []
+    for canonical, synonyms in CATALOG.items():
+        for s in synonyms:
+            # The lookarounds keep "java" from matching inside "javascript" or "sql" inside "postgresql"
+            pattern = re.compile(r"(?<![a-z0-9+#.])" + re.escape(normalize(s)) + r"(?![a-z0-9+#])")
+            patterns.append((canonical, pattern))
+    return patterns
 
 
-_PATRONES = _compilar()
+_PATTERNS = _compile()
 
-# Para convertir lo que escriba el reclutador a la forma canónica ("Postgres" -> "postgresql")
-_SINONIMO_A_CANONICA = {normalizar(s): c for c, ss in CATALOGO.items() for s in ss}
-
-
-def extraer_habilidades(texto: str | None) -> list[str]:
-    """Devuelve las habilidades del catálogo que aparecen en el texto, sin repetir y ordenadas."""
-    normal = normalizar(texto)
-    return sorted({canonica for canonica, patron in _PATRONES if patron.search(normal)})
+# Maps whatever the recruiter types to its canonical form ("Postgres" -> "postgresql")
+_SYNONYM_TO_CANONICAL = {normalize(s): c for c, ss in CATALOG.items() for s in ss}
 
 
-def canonizar_habilidades(habilidades: list[str] | None) -> list[str]:
-    """Normaliza una lista escrita a mano: minúsculas, sin acentos y con sinónimos unificados."""
-    resultado = set()
-    for h in habilidades or []:
-        limpia = normalizar(h).strip()
-        if limpia:
-            resultado.add(_SINONIMO_A_CANONICA.get(limpia, limpia))
-    return sorted(resultado)
+def extract_skills(text: str | None) -> list[str]:
+    """Returns the catalog skills found in the text, deduplicated and sorted."""
+    normalized = normalize(text)
+    return sorted({canonical for canonical, pattern in _PATTERNS if pattern.search(normalized)})
+
+
+def canonicalize_skills(skills: list[str] | None) -> list[str]:
+    """Normalizes a hand-written list: lowercase, no accents and synonyms merged."""
+    result = set()
+    for skill in skills or []:
+        clean = normalize(skill).strip()
+        if clean:
+            result.add(_SYNONYM_TO_CANONICAL.get(clean, clean))
+    return sorted(result)

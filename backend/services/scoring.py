@@ -1,14 +1,15 @@
-"""Cálculo explicable del porcentaje de ajuste (match score) entre una vacante y un candidato."""
-from services.perfil import nivel_a_numero
-from services.similitud import similitud_coseno
+"""Explainable computation of the match score between a job and a candidate."""
+from services.profile import level_to_number
+from services.similarity import cosine_similarity
 
-PESOS = {"habilidades": 0.50, "texto": 0.20, "experiencia": 0.20, "educacion": 0.10}
+# Criterion names are returned to the client in the score breakdown, so they stay in Spanish
+WEIGHTS = {"habilidades": 0.50, "texto": 0.20, "experiencia": 0.20, "educacion": 0.10}
 
-# Los cosenos entre textos reales rara vez superan 0.30, así que se escala para que 0.30 cuente como ajuste total
-COSENO_REFERENCIA = 0.30
+# Cosines between real texts rarely exceed 0.30, so the value is scaled so that 0.30 counts as a full match
+REFERENCE_COSINE = 0.30
 
 
-def clasificar(score: float) -> str:
+def classify(score: float) -> str:
     if score >= 75:
         return "alto"
     if score >= 50:
@@ -16,60 +17,62 @@ def clasificar(score: float) -> str:
     return "bajo"
 
 
-def calcular_match(vacante: dict, candidato: dict, corpus: list[str] | None = None) -> dict:
+def compute_match(job: dict, candidate: dict, corpus: list[str] | None = None) -> dict:
     """
-    vacante: titulo, descripcion, requisitos, habilidades_requeridas, experiencia_minima_anios, nivel_educacion_minimo
-    candidato: cv_texto, habilidades, anios_experiencia, nivel_educacion
-    Solo se evalúa lo que la vacante realmente exige: los criterios sin requisito se omiten y los pesos se reparten.
+    job: title, description, requirements, required_skills, min_experience_years, min_education_level
+    candidate: resume_text, skills, experience_years, education_level
+    Only what the job actually requires is evaluated: criteria without a requirement are skipped
+    and the weights are redistributed among the rest.
     """
-    explicacion = []
-    componentes = {}  # criterio -> puntaje de 0 a 1
+    explanation = []
+    components = {}  # criterion -> score from 0 to 1
 
-    requeridas = set(vacante.get("habilidades_requeridas") or [])
-    del_candidato = set(candidato.get("habilidades") or [])
-    coincidentes = sorted(requeridas & del_candidato)
-    faltantes = sorted(requeridas - del_candidato)
-    if requeridas:
-        componentes["habilidades"] = len(coincidentes) / len(requeridas)
-        explicacion.append(f"Cumple {len(coincidentes)} de {len(requeridas)} habilidades requeridas.")
-        if faltantes:
-            explicacion.append("Le faltan: " + ", ".join(faltantes) + ".")
+    required = set(job.get("required_skills") or [])
+    candidate_skills = set(candidate.get("skills") or [])
+    matching = sorted(required & candidate_skills)
+    missing = sorted(required - candidate_skills)
+    if required:
+        components["habilidades"] = len(matching) / len(required)
+        explanation.append(f"Cumple {len(matching)} de {len(required)} habilidades requeridas.")
+        if missing:
+            explanation.append("Le faltan: " + ", ".join(missing) + ".")
     else:
-        explicacion.append("La vacante no define habilidades específicas.")
+        explanation.append("La vacante no define habilidades específicas.")
 
-    texto_vacante = f"{vacante.get('titulo', '')} {vacante.get('descripcion', '')} {vacante.get('requisitos', '')}"
-    texto_candidato = f"{candidato.get('cv_texto', '')} {' '.join(del_candidato)}"
-    coseno = similitud_coseno(texto_vacante, texto_candidato, corpus)
-    componentes["texto"] = min(1.0, coseno / COSENO_REFERENCIA)
-    explicacion.append(f"Similitud entre el perfil y la descripción de la vacante: {round(coseno * 100)}%.")
+    job_text = f"{job.get('title', '')} {job.get('description', '')} {job.get('requirements', '')}"
+    candidate_text = f"{candidate.get('resume_text', '')} {' '.join(candidate_skills)}"
+    cosine = cosine_similarity(job_text, candidate_text, corpus)
+    components["texto"] = min(1.0, cosine / REFERENCE_COSINE)
+    explanation.append(f"Similitud entre el perfil y la descripción de la vacante: {round(cosine * 100)}%.")
 
-    minimo = vacante.get("experiencia_minima_anios") or 0
-    anios = candidato.get("anios_experiencia") or 0
-    if minimo > 0:
-        componentes["experiencia"] = min(1.0, anios / minimo)
-        if anios >= minimo:
-            explicacion.append(f"Experiencia suficiente ({anios} años; se piden {minimo}).")
+    min_years = job.get("min_experience_years") or 0
+    years = candidate.get("experience_years") or 0
+    if min_years > 0:
+        components["experiencia"] = min(1.0, years / min_years)
+        if years >= min_years:
+            explanation.append(f"Experiencia suficiente ({years} años; se piden {min_years}).")
         else:
-            explicacion.append(f"Experiencia por debajo de lo pedido ({anios} de {minimo} años).")
+            explanation.append(f"Experiencia por debajo de lo pedido ({years} de {min_years} años).")
 
-    nivel_min = nivel_a_numero(vacante.get("nivel_educacion_minimo"))
-    nivel_cand = nivel_a_numero(candidato.get("nivel_educacion"))
-    if nivel_min > 0:
-        componentes["educacion"] = 1.0 if nivel_cand >= nivel_min else nivel_cand / nivel_min
-        if nivel_cand >= nivel_min:
-            explicacion.append("Cumple el nivel educativo mínimo.")
+    min_level = level_to_number(job.get("min_education_level"))
+    candidate_level = level_to_number(candidate.get("education_level"))
+    if min_level > 0:
+        components["educacion"] = 1.0 if candidate_level >= min_level else candidate_level / min_level
+        if candidate_level >= min_level:
+            explanation.append("Cumple el nivel educativo mínimo.")
         else:
-            explicacion.append(f"No alcanza el nivel educativo mínimo ({vacante.get('nivel_educacion_minimo')}).")
+            explanation.append(f"No alcanza el nivel educativo mínimo ({job.get('min_education_level')}).")
 
-    peso_total = sum(PESOS[c] for c in componentes)
-    score = 100 * sum(PESOS[c] * v for c, v in componentes.items()) / peso_total
+    total_weight = sum(WEIGHTS[c] for c in components)
+    score = 100 * sum(WEIGHTS[c] * v for c, v in components.items()) / total_weight
     score = round(score, 1)
 
+    # Keys are returned to the client as-is, so they stay in Spanish
     return {
         "score": score,
-        "clasificacion": clasificar(score),
-        "desglose": {c: round(v * 100, 1) for c, v in componentes.items()},
-        "habilidades_coincidentes": coincidentes,
-        "habilidades_faltantes": faltantes,
-        "explicacion": explicacion,
+        "clasificacion": classify(score),
+        "desglose": {c: round(v * 100, 1) for c, v in components.items()},
+        "habilidades_coincidentes": matching,
+        "habilidades_faltantes": missing,
+        "explicacion": explanation,
     }

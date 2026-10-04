@@ -1,4 +1,4 @@
-"""Procesamiento básico de lenguaje natural en español (sin librerías externas)."""
+"""Basic Spanish natural language processing (no external libraries)."""
 import re
 import unicodedata
 
@@ -13,31 +13,31 @@ STOPWORDS = {
 }
 
 
-def quitar_acentos(texto: str) -> str:
-    descompuesto = unicodedata.normalize("NFD", texto)
-    return "".join(c for c in descompuesto if unicodedata.category(c) != "Mn")
+def remove_accents(text: str) -> str:
+    decomposed = unicodedata.normalize("NFD", text)
+    return "".join(c for c in decomposed if unicodedata.category(c) != "Mn")
 
 
-def normalizar(texto: str | None) -> str:
-    """Minúsculas y sin acentos. 'Ingeniería' -> 'ingenieria'."""
-    return quitar_acentos((texto or "").lower())
+def normalize(text: str | None) -> str:
+    """Lowercase without accents. 'Ingeniería' -> 'ingenieria'."""
+    return remove_accents((text or "").lower())
 
 
-def _raiz(palabra: str) -> str:
-    """Stemming muy ligero: unifica plurales ('bases' -> 'base', 'clientes' -> 'cliente')."""
-    if len(palabra) > 4 and palabra.endswith("es"):
-        return palabra[:-1]
-    if len(palabra) > 3 and palabra.endswith("s"):
-        return palabra[:-1]
-    return palabra
+def _stem(word: str) -> str:
+    """Very light stemming: merges plurals ('bases' -> 'base', 'clientes' -> 'cliente')."""
+    if len(word) > 4 and word.endswith("es"):
+        return word[:-1]
+    if len(word) > 3 and word.endswith("s"):
+        return word[:-1]
+    return word
 
 
-def tokenizar(texto: str | None) -> list[str]:
-    """Convierte un texto en una lista de términos relevantes (sin stopwords ni números sueltos)."""
+def tokenize(text: str | None) -> list[str]:
+    """Turns a text into a list of relevant terms (no stopwords or standalone numbers)."""
     tokens = []
-    for crudo in re.findall(r"[a-z0-9+#.]+", normalizar(texto)):
-        palabra = crudo.strip(".")
-        if len(palabra) < 2 or palabra.isdigit() or palabra in STOPWORDS:
+    for raw in re.findall(r"[a-z0-9+#.]+", normalize(text)):
+        word = raw.strip(".")
+        if len(word) < 2 or word.isdigit() or word in STOPWORDS:
             continue
-        tokens.append(_raiz(palabra))
+        tokens.append(_stem(word))
     return tokens
