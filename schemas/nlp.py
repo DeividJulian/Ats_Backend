@@ -23,3 +23,13 @@ class ComparisonInput(BaseModel):
 
 class ComparisonOutput(BaseModel):
     similarity: float
+
+
+class ResumeAnalysis(BaseModel):
+    name: str | None
+    email: str | None
+    phone: str | None
+    skills: list[str]
+    experience_years: int
+    education_level: str | None
+    key_terms: list[str]

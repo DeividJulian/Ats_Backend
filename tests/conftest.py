@@ -32,8 +32,9 @@ def demo_data(client):
 
 
 def make_pdf(text: str) -> bytes:
-    """Minimal one-page PDF with text, to test resume reading without extra libraries."""
-    content = f"BT /F1 12 Tf 50 750 Td ({text}) Tj ET".encode("latin-1")
+    """Minimal one-page PDF with text (one line per newline), to test resume reading without extra libraries."""
+    lines = " T* ".join(f"({line}) Tj" for line in text.split("\n"))
+    content = f"BT /F1 12 Tf 14 TL 50 750 Td {lines} ET".encode("latin-1")
     objects = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
