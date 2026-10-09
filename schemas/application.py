@@ -32,7 +32,7 @@ class RankingItem(BaseModel):
     application_id: int
     candidate_id: int
     name: str
-    email: str
+    email: str | None
     score: float
     classification: str
     status: str

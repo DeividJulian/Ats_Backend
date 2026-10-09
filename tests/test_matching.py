@@ -100,3 +100,11 @@ def test_uploading_non_pdf_returns_422(client):
 def test_uploading_resume_for_missing_candidate_returns_404(client):
     r = client.post("/candidates/99/resume", files={"file": ("cv.pdf", b"%PDF", "application/pdf")})
     assert r.status_code == 404
+
+
+def test_blind_ranking_hides_personal_data(client, demo_data):
+    normal = client.get("/jobs/1/ranking").json()
+    blind = client.get("/jobs/1/ranking?blind=true").json()
+    assert [r["name"] for r in blind] == [f"Candidato {i}" for i in range(1, len(blind) + 1)]
+    assert all(r["email"] is None for r in blind)
+    assert [r["score"] for r in blind] == [r["score"] for r in normal]

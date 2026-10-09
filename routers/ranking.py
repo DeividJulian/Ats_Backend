@@ -19,8 +19,8 @@ def _job_or_404(db: Session, job_id: int) -> Job:
 
 
 @router.get("/jobs/{job_id}/ranking", response_model=list[RankingItem], summary="Ranking de la vacante")
-def job_ranking(job_id: int, db: Session = Depends(get_db)):
-    """Candidatos postulados, del mejor al peor ajuste."""
+def job_ranking(job_id: int, blind: bool = False, db: Session = Depends(get_db)):
+    """Candidatos postulados, del mejor al peor ajuste. Con blind=true se ocultan nombre y correo (evaluación anónima)."""
     _job_or_404(db, job_id)
     applications = (
         db.query(Application)
@@ -33,8 +33,8 @@ def job_ranking(job_id: int, db: Session = Depends(get_db)):
             position=i,
             application_id=a.id,
             candidate_id=a.candidate_id,
-            name=a.candidate.name,
-            email=a.candidate.email,
+            name=f"Candidato {i}" if blind else a.candidate.name,
+            email=None if blind else a.candidate.email,
             score=a.score,
             classification=a.details.get("classification", "low"),
             status=a.status,
