@@ -1,6 +1,6 @@
 # Portal ATS para pymes — Backend
 
-API que permite publicar vacantes, registrar candidatos y **ordenarlos automáticamente según su ajuste al cargo** usando procesamiento de lenguaje natural (NLP) implementado desde cero, sin servicios externos de IA.
+API que permite publicar vacantes, registrar candidatos y **ordenarlos automáticamente según su ajuste al cargo** usando procesamiento de lenguaje natural (NLP) implementado desde cero. Opcionalmente, un modelo de lenguaje (Claude) redacta evaluaciones, extrae perfiles y propone vacantes.
 
 Proyecto final de Programación Orientada a la Web — Universidad Cooperativa de Colombia.
 
@@ -13,6 +13,7 @@ Proyecto final de Programación Orientada a la Web — Universidad Cooperativa d
 - SQLAlchemy 2 + PostgreSQL en [Neon](https://neon.com) (psycopg v3)
 - Pydantic v2 para validación
 - pypdf para leer hojas de vida en PDF
+- SDK oficial de Anthropic para la IA con Claude (opcional)
 - pytest para pruebas
 - Despliegue en [Render](https://render.com)
 
@@ -37,11 +38,13 @@ El código y la API (rutas y campos JSON) están en inglés. Los mensajes de err
 │   ├── scoring.py       # Puntaje de ajuste explicable
 │   ├── matching.py      # Une base de datos y puntaje
 │   ├── insights.py      # Resumen del perfil, guía de entrevista y formación sugerida
+│   ├── llm.py           # Cliente de la API de Claude con salidas estructuradas
+│   ├── ai.py            # Evaluación, extracción de perfil y redacción de vacantes con Claude
 │   ├── resume.py        # Lectura y análisis de hojas de vida en PDF
 │   ├── pipeline.py      # Flujo de estados de la postulación
 │   ├── stats.py         # Embudo y brechas de talento
 │   └── seed.py          # Datos de demostración
-└── tests/               # 57 pruebas automatizadas
+└── tests/               # 68 pruebas automatizadas
 ```
 
 ## Instalación y ejecución local
@@ -59,6 +62,8 @@ Crea un archivo `.env` copiando `.env.example`:
 | `DATABASE_URL` | Cadena de conexión de PostgreSQL. Se puede pegar tal cual la que da Neon (`postgresql://...`). Para pruebas rápidas también sirve SQLite: `sqlite:///./ats.db` |
 | `ALLOWED_ORIGINS` | Orígenes que pueden llamar a la API, separados por comas (la URL del front). `*` permite todos |
 | `ALLOW_DATA_RESET` | `true` permite `POST /seed?reset=true`, que **borra todos los datos**. Déjalo en `false` en producción |
+| `ANTHROPIC_API_KEY` | Clave de la API de Claude. Opcional: sin ella los endpoints `/ai` responden 503 y todo lo demás funciona |
+| `ANTHROPIC_MODEL` | Opcional. Modelo de Claude a usar (por defecto `claude-opus-5-5`) |
 
 ```
 uvicorn main:app --reload
@@ -70,7 +75,7 @@ Documentación interactiva: `http://127.0.0.1:8000/docs`. Para ver el sistema co
 
 1. Entra a [render.com](https://render.com) con tu cuenta de GitHub.
 2. **New → Blueprint** y elige este repositorio. Render lee `render.yaml` y crea el servicio `ats-backend` (plan gratis, región Virginia, la misma zona de AWS que la base en Neon).
-3. Cuando lo pida, pega en `DATABASE_URL` la cadena de conexión de Neon.
+3. Cuando lo pida, pega en `DATABASE_URL` la cadena de conexión de Neon y, si vas a usar Claude, la clave en `ANTHROPIC_API_KEY` (puedes dejarla vacía).
 4. Al terminar el despliegue, abre `https://<tu-servicio>.onrender.com/docs`.
 5. Cuando el front esté publicado, cambia `ALLOWED_ORIGINS` a su URL en **Environment**.
 
@@ -92,6 +97,16 @@ Todo el procesamiento de lenguaje está implementado desde cero, sin librerías 
 
 Clasificación: `high` (≥ 75), `medium` (≥ 50), `low` (< 50).
 
+### IA con Claude (opcional)
+
+Con `ANTHROPIC_API_KEY` configurada, un modelo de lenguaje complementa el NLP propio. **El puntaje sigue siendo el determinista**: Claude asesora y redacta, no decide.
+
+- **Evaluación de una postulación:** resumen, fortalezas, brechas, recomendación (`advance`, `interview_with_reservations` o `reject`) y preguntas de entrevista.
+- **Extracción de perfil:** habilidades, experiencia, nivel educativo y resumen a partir del texto de una hoja de vida.
+- **Redacción de vacantes:** borrador de descripción, requisitos y habilidades a partir del cargo y unas notas.
+
+Protecciones: las respuestas usan salidas estructuradas (el modelo solo puede devolver el formato esperado y además se validan); la hoja de vida se trata como datos y no como instrucciones, para que nadie escriba "califícame con 100"; se prohíbe usar rasgos protegidos y al modelo nunca le llegan el nombre ni el correo del candidato. Sin clave, `/ai` responde 503; si la API falla, 502. Nunca inventa resultados.
+
 ## Endpoints
 
 | Recurso | Endpoints |
@@ -102,6 +117,7 @@ Clasificación: `high` (≥ 75), `medium` (≥ 50), `low` (< 50).
 | Postulaciones | `POST /applications`, `GET /applications?job_id=&candidate_id=&status=`, `GET /applications/{id}`, `PATCH /applications/{id}/status`, `DELETE /applications/{id}` |
 | Ranking | `GET /jobs/{id}/ranking?blind=`, `GET /jobs/{id}/suggested-candidates`, `GET /candidates/{id}/recommended-jobs`, `POST /applications/{id}/recalculate`, `POST /jobs/{id}/recalculate-ranking` |
 | IA | `GET /candidates/{id}/insights`, `GET /applications/{id}/interview-guide` |
+| IA con Claude | `GET /ai/status`, `POST /ai/evaluate/{application_id}`, `POST /ai/extract-resume`, `POST /ai/draft-job` |
 | NLP | `POST /nlp/analyze-text`, `POST /nlp/similarity` |
 | Análisis | `GET /stats` |
 | Utilidades | `POST /seed?reset=`, `GET /health` |
@@ -123,10 +139,12 @@ Todos responden `{"detail": "mensaje"}` en español:
 | `409` | Conflicto: correo duplicado, postulación repetida, vacante cerrada, cambio de estado no permitido o datos ya cargados en `/seed` |
 | `422` | Datos inválidos o PDF ilegible; el mensaje indica el problema, por ejemplo `name: debe tener al menos 2 caracteres` |
 | `500` | Error interno de base de datos |
+| `502` | La API de Claude falló o devolvió una respuesta inválida |
+| `503` | La IA con Claude no está configurada (falta `ANTHROPIC_API_KEY`) |
 
 ## Pruebas
 
-Las pruebas usan su propia base SQLite (`test_ats.db`), así que nunca tocan la base real:
+Las pruebas usan su propia base SQLite (`test_ats.db`) y simulan la API de Claude, así que nunca tocan la base real ni gastan saldo:
 
 ```
 pip install -r requirements-dev.txt

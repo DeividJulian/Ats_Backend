@@ -15,3 +15,5 @@ services:
         value: "*"
       - key: ALLOW_DATA_RESET
         value: "false"
+      - key: ANTHROPIC_API_KEY
+        sync: false
