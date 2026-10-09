@@ -2,6 +2,7 @@ import os
 
 # IMPORTANT: set BEFORE importing the app so the tests never touch the real database
 os.environ["DATABASE_URL"] = "sqlite:///./test_ats.db"
+os.environ["ALLOW_DATA_RESET"] = "true"
 
 import pytest
 from fastapi.testclient import TestClient

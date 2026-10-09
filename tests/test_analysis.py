@@ -22,3 +22,10 @@ def test_seed_does_not_overwrite_without_reset(client, demo_data):
     assert client.post("/seed").status_code == 409
     assert client.post("/seed?reset=true").status_code == 200
     assert len(client.get("/candidates").json()) == demo_data["candidates"]
+
+
+def test_reset_is_blocked_unless_enabled(client, demo_data, monkeypatch):
+    monkeypatch.setenv("ALLOW_DATA_RESET", "false")
+    r = client.post("/seed?reset=true")
+    assert r.status_code == 403
+    assert len(client.get("/candidates").json()) == demo_data["candidates"]

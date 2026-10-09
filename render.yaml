@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: ats-backend
+    runtime: python
+    plan: free
+    # Same AWS area as the Neon database (us-east-1), to keep queries fast
+    region: virginia
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: ALLOWED_ORIGINS
+        value: "*"
+      - key: ALLOW_DATA_RESET
+        value: "false"

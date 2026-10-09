@@ -1,5 +1,6 @@
 import importlib
 import logging
+import os
 import pkgutil
 import time
 
@@ -26,9 +27,12 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Portal ATS para pymes", version="1.0.0")
 
+# Comma-separated list of allowed origins (the frontend URL in production); "*" allows any origin
+ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
