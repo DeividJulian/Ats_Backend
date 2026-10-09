@@ -48,3 +48,12 @@ class Suggestion(BaseModel):
     classification: str
     matching_skills: list[str]
     missing_skills: list[str]
+
+
+class JobRecommendation(BaseModel):
+    job_id: int
+    title: str
+    score: float
+    classification: str
+    matching_skills: list[str]
+    missing_skills: list[str]

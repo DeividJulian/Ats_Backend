@@ -5,7 +5,7 @@ from database import get_db
 from models.application import Application
 from models.candidate import Candidate
 from models.job import Job
-from schemas.application import ApplicationOut, RankingItem, Suggestion
+from schemas.application import ApplicationOut, JobRecommendation, RankingItem, Suggestion
 from services.matching import evaluate, system_corpus
 
 router = APIRouter(tags=["Ranking"])
@@ -108,3 +108,41 @@ def suggested_candidates(
             )
     suggestions.sort(key=lambda s: s.score, reverse=True)
     return suggestions[:limit]
+
+
+@router.get(
+    "/candidates/{candidate_id}/recommended-jobs",
+    response_model=list[JobRecommendation],
+    summary="Vacantes recomendadas para un candidato",
+)
+def recommended_jobs(
+    candidate_id: int,
+    limit: int = Query(default=5, ge=1, le=50),
+    min_score: float = Query(default=0, ge=0, le=100),
+    db: Session = Depends(get_db),
+):
+    """Vacantes abiertas a las que el candidato todavía NO se ha postulado, ordenadas por ajuste."""
+    candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidato no encontrado")
+    applied = {a.job_id for a in db.query(Application).filter(Application.candidate_id == candidate_id)}
+    corpus = system_corpus(db)
+
+    recommendations = []
+    for job in db.query(Job).filter(Job.status == "open").all():
+        if job.id in applied:
+            continue
+        r = evaluate(db, job, candidate, corpus)
+        if r["score"] >= min_score:
+            recommendations.append(
+                JobRecommendation(
+                    job_id=job.id,
+                    title=job.title,
+                    score=r["score"],
+                    classification=r["classification"],
+                    matching_skills=r["matching_skills"],
+                    missing_skills=r["missing_skills"],
+                )
+            )
+    recommendations.sort(key=lambda j: j.score, reverse=True)
+    return recommendations[:limit]
