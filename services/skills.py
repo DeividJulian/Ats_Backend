@@ -135,3 +135,29 @@ def infer_skills(skills: set[str] | list[str]) -> dict[str, str]:
                 inferred[implied] = inferred.get(source, source)
                 pending.append(implied)
     return inferred
+
+
+# Professional area of each catalog skill, used to tailor summaries, interview questions and training
+SKILL_AREAS: dict[str, list[str]] = {
+    "technology": [
+        "python", "java", "javascript", "typescript", "c#", "c++", "php", "sql", "postgresql", "mysql", "mongodb",
+        "html", "css", "react", "angular", "vue", "node.js", "django", "fastapi", "flask", "spring boot", "docker",
+        "git", "linux", "aws", "azure", "api rest", "machine learning", "power bi", "tableau",
+        "pruebas de software", "analisis de datos",
+    ],
+    "administration": [
+        "excel", "word", "power point", "contabilidad", "facturacion", "nomina", "tributaria", "tesoreria", "siigo",
+        "sap", "inventarios", "logistica", "compras",
+    ],
+    "sales": [
+        "ventas", "atencion al cliente", "negociacion", "crm", "marketing digital", "redes sociales", "seo",
+        "diseno grafico",
+    ],
+    "soft_skills": ["gestion de proyectos", "scrum", "liderazgo", "trabajo en equipo", "comunicacion", "ingles"],
+}
+
+_AREA_BY_SKILL = {skill: area for area, skills in SKILL_AREAS.items() for skill in skills}
+
+
+def skill_area(skill: str) -> str:
+    return _AREA_BY_SKILL.get(skill, "general")

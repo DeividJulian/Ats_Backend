@@ -71,3 +71,30 @@ def test_resume_without_email_returns_422(client):
     r = client.post("/candidates/from-resume", files={"file": ("cv.pdf", pdf, "application/pdf")})
     assert r.status_code == 422
     assert "correo" in r.json()["detail"]
+
+
+def test_candidate_insights(client, demo_data):
+    r = client.get("/candidates/1/insights")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["main_area"] == "technology"
+    assert "profesional" in body["summary"] and "3 años" in body["summary"]
+    assert "python" in body["skills_by_area"]["technology"]
+    # Camila is a developer: the open accounting and sales jobs ask for skills she lacks
+    to_develop = {s["skill"] for s in body["skills_to_develop"]}
+    assert to_develop and "python" not in to_develop
+    assert all(s["suggestion"] for s in body["skills_to_develop"])
+    assert client.get("/candidates/99/insights").status_code == 404
+
+
+def test_interview_guide_covers_strengths_and_gaps(client, demo_data):
+    # Application 3: Valentina (Java developer) for the Python job, low fit
+    r = client.get("/applications/3/interview-guide")
+    assert r.status_code == 200
+    guide = r.json()
+    types = {q["type"] for q in guide["questions"]}
+    assert {"gap", "area", "motivation"} <= types
+    assert guide["gaps"] and len(guide["training_for_gaps"]) == len(guide["gaps"])
+    assert guide["classification"] == "low" and "bajo" in guide["focus"].lower()
+    assert any(q["type"] == "strength" for q in client.get("/applications/1/interview-guide").json()["questions"])
+    assert client.get("/applications/99/interview-guide").status_code == 404
