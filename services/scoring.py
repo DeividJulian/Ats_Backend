@@ -1,11 +1,15 @@
 """Explainable computation of the match score between a job and a candidate."""
 from services.profile import LEVEL_LABELS, level_to_number
 from services.similarity import cosine_similarity
+from services.skills import infer_skills
 
 WEIGHTS = {"skills": 0.50, "text": 0.20, "experience": 0.20, "education": 0.10}
 
 # Cosines between real texts rarely exceed 0.30, so the value is scaled so that 0.30 counts as a full match
 REFERENCE_COSINE = 0.30
+
+# An inferred skill is likely but not proven, so it earns partial credit
+INFERRED_SKILL_CREDIT = 0.75
 
 
 def classify(score: float) -> str:
@@ -29,10 +33,13 @@ def compute_match(job: dict, candidate: dict, corpus: list[str] | None = None) -
     required = set(job.get("required_skills") or [])
     candidate_skills = set(candidate.get("skills") or [])
     matching = sorted(required & candidate_skills)
-    missing = sorted(required - candidate_skills)
+    inferred = {s: src for s, src in infer_skills(candidate_skills).items() if s in required}
+    missing = sorted(required - candidate_skills - set(inferred))
     if required:
-        components["skills"] = len(matching) / len(required)
+        components["skills"] = (len(matching) + INFERRED_SKILL_CREDIT * len(inferred)) / len(required)
         explanation.append(f"Cumple {len(matching)} de {len(required)} habilidades requeridas.")
+        for skill, source in sorted(inferred.items()):
+            explanation.append(f"Se infiere {skill} a partir de {source} (cuenta como {round(INFERRED_SKILL_CREDIT * 100)}%).")
         if missing:
             explanation.append("Le faltan: " + ", ".join(missing) + ".")
     else:
@@ -71,6 +78,7 @@ def compute_match(job: dict, candidate: dict, corpus: list[str] | None = None) -
         "classification": classify(score),
         "breakdown": {c: round(v * 100, 1) for c, v in components.items()},
         "matching_skills": matching,
+        "inferred_skills": dict(sorted(inferred.items())),
         "missing_skills": missing,
         "explanation": explanation,
     }

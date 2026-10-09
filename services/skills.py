@@ -101,3 +101,37 @@ def canonicalize_skills(skills: list[str] | None) -> list[str]:
         if clean:
             result.add(_SYNONYM_TO_CANONICAL.get(clean, clean))
     return sorted(result)
+
+
+# Knowing the key skill strongly suggests knowing the listed ones ("django" -> "python")
+IMPLIED_SKILLS: dict[str, list[str]] = {
+    "django": ["python"],
+    "fastapi": ["python", "api rest"],
+    "flask": ["python"],
+    "spring boot": ["java"],
+    "react": ["javascript"],
+    "vue": ["javascript"],
+    "angular": ["typescript"],
+    "typescript": ["javascript"],
+    "node.js": ["javascript"],
+    "postgresql": ["sql"],
+    "mysql": ["sql"],
+    "power bi": ["analisis de datos"],
+    "tableau": ["analisis de datos"],
+    "siigo": ["contabilidad"],
+}
+
+
+def infer_skills(skills: set[str] | list[str]) -> dict[str, str]:
+    """Returns the skills implied by the given ones that are not already present, as {inferred: source}."""
+    known = set(skills)
+    inferred: dict[str, str] = {}
+    pending = sorted(known)
+    while pending:
+        source = pending.pop()
+        for implied in IMPLIED_SKILLS.get(source, []):
+            if implied not in known and implied not in inferred:
+                # Keep the original skill as the source, even through chains (angular -> typescript -> javascript)
+                inferred[implied] = inferred.get(source, source)
+                pending.append(implied)
+    return inferred
