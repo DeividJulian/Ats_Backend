@@ -42,32 +42,32 @@ CATALOG: dict[str, list[str]] = {
     "word": ["word"],
     "power point": ["power point", "powerpoint"],
     "contabilidad": ["contabilidad", "contable", "contabilizacion"],
-    "facturacion": ["facturacion", "facturas", "facturacion electronica"],
-    "nomina": ["nomina", "liquidacion de nomina"],
+    "facturación": ["facturacion", "facturas", "facturacion electronica"],
+    "nómina": ["nomina", "liquidacion de nomina"],
     "tributaria": ["tributaria", "impuestos", "declaracion de renta", "dian", "iva"],
-    "tesoreria": ["tesoreria", "conciliaciones bancarias", "conciliacion bancaria"],
+    "tesorería": ["tesoreria", "conciliaciones bancarias", "conciliacion bancaria"],
     "siigo": ["siigo"],
     "sap": ["sap"],
     "inventarios": ["inventarios", "control de inventario", "gestion de inventarios"],
-    "logistica": ["logistica", "cadena de suministro"],
+    "logística": ["logistica", "cadena de suministro"],
     "compras": ["compras", "proveedores"],
     # Sales and marketing
     "ventas": ["ventas", "venta consultiva", "gestion comercial"],
-    "atencion al cliente": ["atencion al cliente", "servicio al cliente", "servicio al usuario"],
-    "negociacion": ["negociacion", "negociar"],
+    "atención al cliente": ["atencion al cliente", "servicio al cliente", "servicio al usuario"],
+    "negociación": ["negociacion", "negociar"],
     "crm": ["crm", "hubspot", "salesforce"],
     "marketing digital": ["marketing digital", "mercadeo digital", "publicidad digital"],
     "redes sociales": ["redes sociales", "community manager", "social media"],
     "seo": ["seo", "posicionamiento web"],
-    "diseno grafico": ["diseno grafico", "photoshop", "illustrator", "canva"],
+    "diseño gráfico": ["diseno grafico", "photoshop", "illustrator", "canva"],
     # Soft skills and management
-    "gestion de proyectos": ["gestion de proyectos", "project management", "pmp"],
+    "gestión de proyectos": ["gestion de proyectos", "project management", "pmp"],
     "scrum": ["scrum", "metodologias agiles", "agile", "kanban"],
     "liderazgo": ["liderazgo", "liderar equipos", "lidere equipos", "manejo de equipos"],
     "trabajo en equipo": ["trabajo en equipo", "trabajo colaborativo"],
-    "comunicacion": ["comunicacion asertiva", "comunicacion efectiva", "comunicacion"],
-    "ingles": ["ingles", "english", "bilingue"],
-    "analisis de datos": ["analisis de datos", "analitica de datos", "data analysis"],
+    "comunicación": ["comunicacion asertiva", "comunicacion efectiva", "comunicacion"],
+    "inglés": ["ingles", "english", "bilingue"],
+    "análisis de datos": ["analisis de datos", "analitica de datos", "data analysis"],
 }
 
 
@@ -87,10 +87,15 @@ _PATTERNS = _compile()
 _SYNONYM_TO_CANONICAL = {normalize(s): c for c, ss in CATALOG.items() for s in ss}
 
 
+def sort_skills(skills) -> list[str]:
+    """Alphabetical order ignoring accents, so "análisis" goes with the "a"."""
+    return sorted(set(skills), key=normalize)
+
+
 def extract_skills(text: str | None) -> list[str]:
     """Returns the catalog skills found in the text, deduplicated and sorted."""
     normalized = normalize(text)
-    return sorted({canonical for canonical, pattern in _PATTERNS if pattern.search(normalized)})
+    return sort_skills(canonical for canonical, pattern in _PATTERNS if pattern.search(normalized))
 
 
 def canonicalize_skills(skills: list[str] | None) -> list[str]:
@@ -100,7 +105,7 @@ def canonicalize_skills(skills: list[str] | None) -> list[str]:
         clean = normalize(skill).strip()
         if clean:
             result.add(_SYNONYM_TO_CANONICAL.get(clean, clean))
-    return sorted(result)
+    return sort_skills(result)
 
 
 # Knowing the key skill strongly suggests knowing the listed ones ("django" -> "python")
@@ -116,8 +121,8 @@ IMPLIED_SKILLS: dict[str, list[str]] = {
     "node.js": ["javascript"],
     "postgresql": ["sql"],
     "mysql": ["sql"],
-    "power bi": ["analisis de datos"],
-    "tableau": ["analisis de datos"],
+    "power bi": ["análisis de datos"],
+    "tableau": ["análisis de datos"],
     "siigo": ["contabilidad"],
 }
 
@@ -143,17 +148,17 @@ SKILL_AREAS: dict[str, list[str]] = {
         "python", "java", "javascript", "typescript", "c#", "c++", "php", "sql", "postgresql", "mysql", "mongodb",
         "html", "css", "react", "angular", "vue", "node.js", "django", "fastapi", "flask", "spring boot", "docker",
         "git", "linux", "aws", "azure", "api rest", "machine learning", "power bi", "tableau",
-        "pruebas de software", "analisis de datos",
+        "pruebas de software", "análisis de datos",
     ],
     "administration": [
-        "excel", "word", "power point", "contabilidad", "facturacion", "nomina", "tributaria", "tesoreria", "siigo",
-        "sap", "inventarios", "logistica", "compras",
+        "excel", "word", "power point", "contabilidad", "facturación", "nómina", "tributaria", "tesorería", "siigo",
+        "sap", "inventarios", "logística", "compras",
     ],
     "sales": [
-        "ventas", "atencion al cliente", "negociacion", "crm", "marketing digital", "redes sociales", "seo",
-        "diseno grafico",
+        "ventas", "atención al cliente", "negociación", "crm", "marketing digital", "redes sociales", "seo",
+        "diseño gráfico",
     ],
-    "soft_skills": ["gestion de proyectos", "scrum", "liderazgo", "trabajo en equipo", "comunicacion", "ingles"],
+    "soft_skills": ["gestión de proyectos", "scrum", "liderazgo", "trabajo en equipo", "comunicación", "inglés"],
 }
 
 _AREA_BY_SKILL = {skill: area for area, skills in SKILL_AREAS.items() for skill in skills}

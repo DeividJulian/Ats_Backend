@@ -1,7 +1,7 @@
 """Explainable computation of the match score between a job and a candidate."""
 from services.profile import LEVEL_LABELS, level_to_number
 from services.similarity import cosine_similarity
-from services.skills import infer_skills
+from services.skills import infer_skills, sort_skills
 
 WEIGHTS = {"skills": 0.50, "text": 0.20, "experience": 0.20, "education": 0.10}
 
@@ -32,13 +32,14 @@ def compute_match(job: dict, candidate: dict, corpus: list[str] | None = None) -
 
     required = set(job.get("required_skills") or [])
     candidate_skills = set(candidate.get("skills") or [])
-    matching = sorted(required & candidate_skills)
+    matching = sort_skills(required & candidate_skills)
     inferred = {s: src for s, src in infer_skills(candidate_skills).items() if s in required}
-    missing = sorted(required - candidate_skills - set(inferred))
+    missing = sort_skills(required - candidate_skills - set(inferred))
     if required:
         components["skills"] = (len(matching) + INFERRED_SKILL_CREDIT * len(inferred)) / len(required)
         explanation.append(f"Cumple {len(matching)} de {len(required)} habilidades requeridas.")
-        for skill, source in sorted(inferred.items()):
+        for skill in sort_skills(inferred):
+            source = inferred[skill]
             explanation.append(f"Se infiere {skill} a partir de {source} (cuenta como {round(INFERRED_SKILL_CREDIT * 100)}%).")
         if missing:
             explanation.append("Le faltan: " + ", ".join(missing) + ".")
@@ -78,7 +79,7 @@ def compute_match(job: dict, candidate: dict, corpus: list[str] | None = None) -
         "classification": classify(score),
         "breakdown": {c: round(v * 100, 1) for c, v in components.items()},
         "matching_skills": matching,
-        "inferred_skills": dict(sorted(inferred.items())),
+        "inferred_skills": {s: inferred[s] for s in sort_skills(inferred)},
         "missing_skills": missing,
         "explanation": explanation,
     }

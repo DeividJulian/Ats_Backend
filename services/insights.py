@@ -5,7 +5,7 @@ Every text produced here is shown to the user, so it is written in Spanish.
 from collections import Counter
 
 from services.profile import LEVEL_LABELS
-from services.skills import infer_skills, skill_area
+from services.skills import infer_skills, skill_area, sort_skills
 
 AREA_LABELS = {
     "technology": "tecnología",
@@ -59,7 +59,7 @@ def main_area(skills: list[str]) -> str:
 
 def skills_by_area(skills: list[str]) -> dict[str, list[str]]:
     grouped: dict[str, list[str]] = {}
-    for skill in sorted(skills):
+    for skill in sort_skills(skills):
         grouped.setdefault(skill_area(skill), []).append(skill)
     return grouped
 
@@ -75,7 +75,7 @@ def candidate_summary(skills: list[str], experience_years: int, education_level:
         + (f" con {experience_years} años de experiencia." if experience_years else " sin experiencia registrada.")
     ]
     if skills:
-        sentences.append(f"Sus habilidades principales son {_join(sorted(skills)[:5])}.")
+        sentences.append(f"Sus habilidades principales son {_join(sort_skills(skills)[:5])}.")
         sentences.append(f"Su perfil se orienta al área de {AREA_LABELS[main_area(skills)]}.")
     else:
         sentences.append("No se detectaron habilidades del catálogo en su hoja de vida.")

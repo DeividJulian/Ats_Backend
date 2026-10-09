@@ -22,7 +22,7 @@ def test_sql_is_not_detected_inside_postgresql():
 
 
 def test_synonyms_are_merged():
-    assert canonicalize_skills(["Postgres", " EXCEL ", "Inglés"]) == ["excel", "ingles", "postgresql"]
+    assert canonicalize_skills(["Postgres", " EXCEL ", "Inglés"]) == ["excel", "inglés", "postgresql"]
 
 
 def test_experience_years():
@@ -59,3 +59,8 @@ def test_analyze_text_endpoint(client):
 def test_similarity_endpoint(client):
     r = client.post("/nlp/similarity", json={"text_a": "ventas y negociación", "text_b": "ventas y negociación"})
     assert r.json()["similarity"] > 0.99
+
+
+def test_skill_names_keep_spanish_accents_and_order():
+    assert extract_skills("Manejo de nomina, facturacion y analisis de datos") == ["análisis de datos", "facturación", "nómina"]
+    assert canonicalize_skills(["Atencion al cliente", "Diseño gráfico"]) == ["atención al cliente", "diseño gráfico"]

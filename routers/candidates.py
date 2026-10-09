@@ -7,7 +7,7 @@ from models.application import Application
 from models.candidate import Candidate
 from schemas.candidate import CandidateCreate, CandidateOut
 from services.profile import extract_education_level, extract_experience_years
-from services.skills import canonicalize_skills, extract_skills
+from services.skills import canonicalize_skills, extract_skills, sort_skills
 
 router = APIRouter(prefix="/candidates", tags=["Candidatos"])
 
@@ -18,7 +18,7 @@ def fill_profile(candidate: Candidate, data: CandidateCreate) -> None:
     candidate.email = data.email
     candidate.phone = data.phone
     candidate.resume_text = data.resume_text
-    candidate.skills = sorted(set(canonicalize_skills(data.skills)) | set(extract_skills(data.resume_text)))
+    candidate.skills = sort_skills(canonicalize_skills(data.skills) + extract_skills(data.resume_text))
     candidate.experience_years = (
         data.experience_years if data.experience_years is not None else extract_experience_years(data.resume_text)
     )
