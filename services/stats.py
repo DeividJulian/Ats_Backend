@@ -22,17 +22,16 @@ def compute_statistics(db: Session) -> dict:
     for a in applications:
         scores_by_job.setdefault(a.job_id, []).append(a.score)
 
-    # The returned keys are shown to the client, so they stay in Spanish
     per_job = [
         {
-            "vacante_id": j.id,
-            "titulo": j.title,
-            "estado": j.status,
-            "postulaciones": len(scores_by_job.get(j.id, [])),
-            "score_promedio": round(sum(scores_by_job[j.id]) / len(scores_by_job[j.id]), 1)
+            "job_id": j.id,
+            "title": j.title,
+            "status": j.status,
+            "applications": len(scores_by_job.get(j.id, [])),
+            "average_score": round(sum(scores_by_job[j.id]) / len(scores_by_job[j.id]), 1)
             if scores_by_job.get(j.id)
             else 0.0,
-            "score_maximo": max(scores_by_job.get(j.id, [0.0])),
+            "max_score": max(scores_by_job.get(j.id, [0.0])),
         }
         for j in jobs
     ]
@@ -40,26 +39,26 @@ def compute_statistics(db: Session) -> dict:
     demanded = Counter(s for j in jobs for s in (j.required_skills or []))
     available = Counter(s for c in candidates for s in (c.skills or []))
     most_demanded = [
-        {"habilidad": s, "vacantes": n, "candidatos_que_la_tienen": available.get(s, 0)}
+        {"skill": s, "jobs": n, "candidates_with_skill": available.get(s, 0)}
         for s, n in demanded.most_common(10)
     ]
     # Gap: required skills that almost no candidate has
     gaps = sorted(
-        (x for x in most_demanded if x["candidatos_que_la_tienen"] < x["vacantes"] * 2),
-        key=lambda x: x["candidatos_que_la_tienen"],
+        (x for x in most_demanded if x["candidates_with_skill"] < x["jobs"] * 2),
+        key=lambda x: x["candidates_with_skill"],
     )
 
-    hired = funnel.get("contratado", 0)
+    hired = funnel.get("hired", 0)
     return {
-        "totales": {
-            "vacantes": len(jobs),
-            "vacantes_abiertas": sum(1 for j in jobs if j.status == "abierta"),
-            "candidatos": len(candidates),
-            "postulaciones": len(applications),
+        "totals": {
+            "jobs": len(jobs),
+            "open_jobs": sum(1 for j in jobs if j.status == "open"),
+            "candidates": len(candidates),
+            "applications": len(applications),
         },
-        "embudo": funnel,
-        "tasa_contratacion_pct": round(100 * hired / len(applications), 1) if applications else 0.0,
-        "por_vacante": per_job,
-        "habilidades_mas_demandadas": most_demanded,
-        "brechas_de_talento": gaps,
+        "funnel": funnel,
+        "hire_rate_pct": round(100 * hired / len(applications), 1) if applications else 0.0,
+        "per_job": per_job,
+        "most_demanded_skills": most_demanded,
+        "talent_gaps": gaps,
     }

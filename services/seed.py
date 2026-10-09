@@ -15,21 +15,21 @@ JOBS = [
         "description": "Buscamos un desarrollador para construir y mantener APIs REST de nuestra plataforma de pedidos.",
         "requirements": "Python, FastAPI o Django, PostgreSQL, Git. Deseable Docker. Experiencia mínima de 1 año.",
         "min_experience_years": 1,
-        "min_education_level": "tecnologo",
+        "min_education_level": "technologist",
     },
     {
         "title": "Auxiliar Contable",
         "description": "Apoyo al área contable de una pyme comercial: registro de facturas, conciliaciones y nómina.",
         "requirements": "Contabilidad, Excel avanzado, facturación electrónica, Siigo. 2 años de experiencia.",
         "min_experience_years": 2,
-        "min_education_level": "tecnico",
+        "min_education_level": "technician",
     },
     {
         "title": "Ejecutivo de Ventas",
         "description": "Responsable de prospectar clientes, negociar y cerrar ventas B2B, con seguimiento en CRM.",
         "requirements": "Ventas, negociación, atención al cliente, CRM, comunicación asertiva y liderazgo. Inglés deseable.",
         "min_experience_years": 3,
-        "min_education_level": "profesional",
+        "min_education_level": "professional",
     },
 ]
 
@@ -60,9 +60,9 @@ CANDIDATES = [
 
 # (job index, candidate index, final status)
 APPLICATIONS = [
-    (0, 0, "entrevista"), (0, 1, "preseleccionado"), (0, 2, "nuevo"), (0, 6, "rechazado"),
-    (1, 3, "oferta"), (1, 4, "preseleccionado"), (1, 8, "nuevo"),
-    (2, 5, "entrevista"), (2, 7, "nuevo"), (2, 6, "nuevo"),
+    (0, 0, "interview"), (0, 1, "shortlisted"), (0, 2, "new"), (0, 6, "rejected"),
+    (1, 3, "offer"), (1, 4, "shortlisted"), (1, 8, "new"),
+    (2, 5, "interview"), (2, 7, "new"), (2, 6, "new"),
 ]
 
 
@@ -114,5 +114,4 @@ def load_demo_data(db: Session) -> dict:
             )
         )
     db.commit()
-    # Summary keys are shown to the client, so they stay in Spanish
-    return {"vacantes": len(jobs), "candidatos": len(candidates), "postulaciones": len(APPLICATIONS)}
+    return {"jobs": len(jobs), "candidates": len(candidates), "applications": len(APPLICATIONS)}

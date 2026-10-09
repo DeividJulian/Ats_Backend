@@ -19,5 +19,5 @@ class Job(Base):
     required_skills = Column(JSON, nullable=False, default=list)
     min_experience_years = Column(Integer, nullable=False, default=0)
     min_education_level = Column(String, nullable=True)
-    status = Column(String, nullable=False, default="abierta")
+    status = Column(String, nullable=False, default="open")
     created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)

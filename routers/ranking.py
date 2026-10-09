@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -10,9 +10,6 @@ from services.matching import evaluate, system_corpus
 
 router = APIRouter(tags=["Ranking"])
 
-JobId = Path(alias="vacante_id")
-ApplicationId = Path(alias="postulacion_id")
-
 
 def _job_or_404(db: Session, job_id: int) -> Job:
     job = db.query(Job).filter(Job.id == job_id).first()
@@ -21,8 +18,8 @@ def _job_or_404(db: Session, job_id: int) -> Job:
     return job
 
 
-@router.get("/vacantes/{vacante_id}/ranking", response_model=list[RankingItem], summary="Ranking de la vacante")
-def job_ranking(job_id: int = JobId, db: Session = Depends(get_db)):
+@router.get("/jobs/{job_id}/ranking", response_model=list[RankingItem], summary="Ranking de la vacante")
+def job_ranking(job_id: int, db: Session = Depends(get_db)):
     """Candidatos postulados, del mejor al peor ajuste."""
     _job_or_404(db, job_id)
     applications = (
@@ -39,19 +36,19 @@ def job_ranking(job_id: int = JobId, db: Session = Depends(get_db)):
             name=a.candidate.name,
             email=a.candidate.email,
             score=a.score,
-            classification=a.details.get("clasificacion", "bajo"),
+            classification=a.details.get("classification", "low"),
             status=a.status,
-            matching_skills=a.details.get("habilidades_coincidentes", []),
-            missing_skills=a.details.get("habilidades_faltantes", []),
+            matching_skills=a.details.get("matching_skills", []),
+            missing_skills=a.details.get("missing_skills", []),
         )
         for i, a in enumerate(applications, start=1)
     ]
 
 
 @router.post(
-    "/postulaciones/{postulacion_id}/recalcular", response_model=ApplicationOut, summary="Recalcular postulación"
+    "/applications/{application_id}/recalculate", response_model=ApplicationOut, summary="Recalcular postulación"
 )
-def recalculate_application(application_id: int = ApplicationId, db: Session = Depends(get_db)):
+def recalculate_application(application_id: int, db: Session = Depends(get_db)):
     """Vuelve a calcular el score (útil si se editó la vacante o la hoja de vida del candidato)."""
     application = db.query(Application).filter(Application.id == application_id).first()
     if not application:
@@ -64,8 +61,8 @@ def recalculate_application(application_id: int = ApplicationId, db: Session = D
     return application
 
 
-@router.post("/vacantes/{vacante_id}/recalcular-ranking", summary="Recalcular ranking de la vacante")
-def recalculate_ranking(job_id: int = JobId, db: Session = Depends(get_db)):
+@router.post("/jobs/{job_id}/recalculate-ranking", summary="Recalcular ranking de la vacante")
+def recalculate_ranking(job_id: int, db: Session = Depends(get_db)):
     """Vuelve a calcular el score de todas las postulaciones de la vacante."""
     job = _job_or_404(db, job_id)
     corpus = system_corpus(db)
@@ -75,16 +72,16 @@ def recalculate_ranking(job_id: int = JobId, db: Session = Depends(get_db)):
         a.score = result["score"]
         a.details = result
     db.commit()
-    return {"mensaje": "Ranking recalculado", "postulaciones_actualizadas": len(applications)}
+    return {"message": "Ranking recalculado", "updated_applications": len(applications)}
 
 
 @router.get(
-    "/vacantes/{vacante_id}/candidatos-sugeridos", response_model=list[Suggestion], summary="Candidatos sugeridos"
+    "/jobs/{job_id}/suggested-candidates", response_model=list[Suggestion], summary="Candidatos sugeridos"
 )
 def suggested_candidates(
-    job_id: int = JobId,
-    limit: int = Query(default=5, ge=1, le=50, alias="limite"),
-    min_score: float = Query(default=0, ge=0, le=100, alias="score_minimo"),
+    job_id: int,
+    limit: int = Query(default=5, ge=1, le=50),
+    min_score: float = Query(default=0, ge=0, le=100),
     db: Session = Depends(get_db),
 ):
     """Recomienda candidatos de la base que todavía NO se han postulado, ordenados por ajuste."""
@@ -104,9 +101,9 @@ def suggested_candidates(
                     name=candidate.name,
                     email=candidate.email,
                     score=r["score"],
-                    classification=r["clasificacion"],
-                    matching_skills=r["habilidades_coincidentes"],
-                    missing_skills=r["habilidades_faltantes"],
+                    classification=r["classification"],
+                    matching_skills=r["matching_skills"],
+                    missing_skills=r["missing_skills"],
                 )
             )
     suggestions.sort(key=lambda s: s.score, reverse=True)

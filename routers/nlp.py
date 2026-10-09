@@ -11,7 +11,7 @@ from services.skills import extract_skills
 router = APIRouter(prefix="/nlp", tags=["NLP"])
 
 
-@router.post("/analizar-texto", response_model=TextAnalysis, summary="Analizar texto")
+@router.post("/analyze-text", response_model=TextAnalysis, summary="Analizar texto")
 def analyze_text(data: TextInput):
     """Extrae habilidades, experiencia y nivel educativo de cualquier texto (hoja de vida o vacante)."""
     frequencies = Counter(tokenize(data.text))
@@ -23,7 +23,7 @@ def analyze_text(data: TextInput):
     )
 
 
-@router.post("/similitud", response_model=ComparisonOutput, summary="Comparar textos")
+@router.post("/similarity", response_model=ComparisonOutput, summary="Comparar textos")
 def compare_texts(data: ComparisonInput):
     """Similitud semántica léxica (TF-IDF + coseno) entre dos textos, de 0 a 1."""
     return ComparisonOutput(similarity=cosine_similarity(data.text_a, data.text_b))

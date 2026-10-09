@@ -3,58 +3,48 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from schemas.nlp import SPANISH_ALIASES
-
-ApplicationStatusValue = Literal["nuevo", "preseleccionado", "entrevista", "oferta", "contratado", "rechazado"]
+ApplicationStatusValue = Literal["new", "shortlisted", "interview", "offer", "hired", "rejected"]
 
 
 class ApplicationCreate(BaseModel):
-    model_config = SPANISH_ALIASES
-
-    job_id: int = Field(gt=0, alias="vacante_id")
-    candidate_id: int = Field(gt=0, alias="candidato_id")
+    job_id: int = Field(gt=0)
+    candidate_id: int = Field(gt=0)
 
 
 class ApplicationStatus(BaseModel):
-    model_config = SPANISH_ALIASES
-
-    status: ApplicationStatusValue = Field(alias="estado")
+    status: ApplicationStatusValue
 
 
 class ApplicationOut(BaseModel):
-    model_config = ConfigDict(**SPANISH_ALIASES, from_attributes=True)
+    model_config = ConfigDict(from_attributes=True)
 
     id: int
-    job_id: int = Field(alias="vacante_id")
-    candidate_id: int = Field(alias="candidato_id")
+    job_id: int
+    candidate_id: int
     score: float
-    details: dict[str, Any] = Field(alias="detalle")
-    status: str = Field(alias="estado")
-    created_at: datetime = Field(alias="creada_en")
+    details: dict[str, Any]
+    status: str
+    created_at: datetime
 
 
 class RankingItem(BaseModel):
-    model_config = SPANISH_ALIASES
-
-    position: int = Field(alias="posicion")
-    application_id: int = Field(alias="postulacion_id")
-    candidate_id: int = Field(alias="candidato_id")
-    name: str = Field(alias="nombre")
+    position: int
+    application_id: int
+    candidate_id: int
+    name: str
     email: str
     score: float
-    classification: str = Field(alias="clasificacion")
-    status: str = Field(alias="estado")
-    matching_skills: list[str] = Field(alias="habilidades_coincidentes")
-    missing_skills: list[str] = Field(alias="habilidades_faltantes")
+    classification: str
+    status: str
+    matching_skills: list[str]
+    missing_skills: list[str]
 
 
 class Suggestion(BaseModel):
-    model_config = SPANISH_ALIASES
-
-    candidate_id: int = Field(alias="candidato_id")
-    name: str = Field(alias="nombre")
+    candidate_id: int
+    name: str
     email: str
     score: float
-    classification: str = Field(alias="clasificacion")
-    matching_skills: list[str] = Field(alias="habilidades_coincidentes")
-    missing_skills: list[str] = Field(alias="habilidades_faltantes")
+    classification: str
+    matching_skills: list[str]
+    missing_skills: list[str]

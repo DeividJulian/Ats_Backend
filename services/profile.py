@@ -4,28 +4,39 @@ import re
 from services.nlp import normalize
 
 LEVELS = {
-    "bachiller": 1,
-    "tecnico": 2,
-    "tecnologo": 3,
-    "profesional": 4,
-    "especializacion": 5,
-    "maestria": 6,
-    "doctorado": 7,
+    "high_school": 1,
+    "technician": 2,
+    "technologist": 3,
+    "professional": 4,
+    "specialization": 5,
+    "masters": 6,
+    "doctorate": 7,
 }
 
-# From highest to lowest level; the first one found in the text wins
+# Spanish names used in the texts shown to the user
+LEVEL_LABELS = {
+    "high_school": "bachiller",
+    "technician": "técnico",
+    "technologist": "tecnólogo",
+    "professional": "profesional",
+    "specialization": "especialización",
+    "masters": "maestría",
+    "doctorate": "doctorado",
+}
+
+# From highest to lowest level; the first one found in the (Spanish) text wins
 _LEVEL_KEYWORDS = [
-    ("doctorado", ["doctorado", "phd"]),
-    ("maestria", ["maestria", "magister", "master"]),
-    ("especializacion", ["especializacion", "especialista en"]),
+    ("doctorate", ["doctorado", "phd"]),
+    ("masters", ["maestria", "magister", "master"]),
+    ("specialization", ["especializacion", "especialista en"]),
     (
-        "profesional",
+        "professional",
         ["ingenier", "licenciad", "universitari", "pregrado", "contador publico", "administrador de",
          "abogad", "psicolog", "profesional en", "economista"],
     ),
-    ("tecnologo", ["tecnologo", "tecnologia en"]),
-    ("tecnico", ["tecnico"]),
-    ("bachiller", ["bachiller"]),
+    ("technologist", ["tecnologo", "tecnologia en"]),
+    ("technician", ["tecnico"]),
+    ("high_school", ["bachiller"]),
 ]
 
 _EXPERIENCE_PATTERNS = [

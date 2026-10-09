@@ -28,7 +28,7 @@ def client():
 def demo_data(client):
     r = client.post("/seed")
     assert r.status_code == 200
-    return r.json()["resumen"]
+    return r.json()["summary"]
 
 
 def make_pdf(text: str) -> bytes:

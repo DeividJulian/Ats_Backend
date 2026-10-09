@@ -32,8 +32,8 @@ def test_experience_years():
 
 
 def test_education_level_takes_the_highest():
-    assert extract_education_level("Técnico en sistemas y Maestría en gestión") == "maestria"
-    assert extract_education_level("Ingeniero de sistemas") == "profesional"
+    assert extract_education_level("Técnico en sistemas y Maestría en gestión") == "masters"
+    assert extract_education_level("Ingeniero de sistemas") == "professional"
     assert extract_education_level("Me gusta correr") is None
 
 
@@ -49,13 +49,13 @@ def test_similarity_of_empty_text_is_zero():
 
 
 def test_analyze_text_endpoint(client):
-    r = client.post("/nlp/analizar-texto", json={"texto": "Contador con 4 años de experiencia en Excel y Siigo"})
+    r = client.post("/nlp/analyze-text", json={"text": "Contador con 4 años de experiencia en Excel y Siigo"})
     assert r.status_code == 200
     body = r.json()
-    assert body["anios_experiencia"] == 4
-    assert {"excel", "siigo"} <= set(body["habilidades"])
+    assert body["experience_years"] == 4
+    assert {"excel", "siigo"} <= set(body["skills"])
 
 
 def test_similarity_endpoint(client):
-    r = client.post("/nlp/similitud", json={"texto_a": "ventas y negociación", "texto_b": "ventas y negociación"})
-    assert r.json()["similitud"] > 0.99
+    r = client.post("/nlp/similarity", json={"text_a": "ventas y negociación", "text_b": "ventas y negociación"})
+    assert r.json()["similarity"] > 0.99

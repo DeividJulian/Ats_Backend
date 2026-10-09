@@ -19,7 +19,7 @@ class Application(Base):
     candidate_id = Column(Integer, ForeignKey("candidates.id"), nullable=False)
     score = Column(Float, nullable=False, default=0.0)
     details = Column(JSON, nullable=False, default=dict)
-    status = Column(String, nullable=False, default="nuevo")
+    status = Column(String, nullable=False, default="new")
     created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
     job = relationship("Job")

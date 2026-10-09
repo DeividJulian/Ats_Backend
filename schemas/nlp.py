@@ -1,36 +1,25 @@
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, StringConstraints
 
 LongText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=20000)]
 
-# Attributes are in English; the aliases are the Spanish field names the API exposes
-SPANISH_ALIASES = ConfigDict(validate_by_name=True, validate_by_alias=True, serialize_by_alias=True)
-
 
 class TextInput(BaseModel):
-    model_config = SPANISH_ALIASES
-
-    text: LongText = Field(alias="texto")
+    text: LongText
 
 
 class TextAnalysis(BaseModel):
-    model_config = SPANISH_ALIASES
-
-    skills: list[str] = Field(alias="habilidades")
-    experience_years: int = Field(alias="anios_experiencia")
-    education_level: str | None = Field(alias="nivel_educacion")
-    key_terms: list[str] = Field(alias="terminos_clave")
+    skills: list[str]
+    experience_years: int
+    education_level: str | None
+    key_terms: list[str]
 
 
 class ComparisonInput(BaseModel):
-    model_config = SPANISH_ALIASES
-
-    text_a: LongText = Field(alias="texto_a")
-    text_b: LongText = Field(alias="texto_b")
+    text_a: LongText
+    text_b: LongText
 
 
 class ComparisonOutput(BaseModel):
-    model_config = SPANISH_ALIASES
-
-    similarity: float = Field(alias="similitud")
+    similarity: float

@@ -1,15 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from database import get_db
 from models.application import Application
 from models.job import Job
-from schemas.job import JobCreate, JobOut, JobStatus
+from schemas.job import JobCreate, JobOut, JobStatus, JobStatusValue
 from services.skills import canonicalize_skills, extract_skills
 
-router = APIRouter(prefix="/vacantes", tags=["Vacantes"])
-
-JobId = Path(alias="vacante_id")
+router = APIRouter(prefix="/jobs", tags=["Vacantes"])
 
 
 def apply_data(job: Job, data: JobCreate) -> None:
@@ -35,6 +33,7 @@ def get_job_or_404(db: Session, job_id: int) -> Job:
 
 @router.post("", response_model=JobOut, status_code=201, summary="Crear vacante")
 def create_job(data: JobCreate, db: Session = Depends(get_db)):
+    """Si no se envían habilidades requeridas, el sistema las deduce del texto de la vacante."""
     job = Job()
     apply_data(job, data)
     db.add(job)
@@ -44,20 +43,20 @@ def create_job(data: JobCreate, db: Session = Depends(get_db)):
 
 
 @router.get("", response_model=list[JobOut], summary="Listar vacantes")
-def list_jobs(status: str | None = Query(None, alias="estado"), db: Session = Depends(get_db)):
+def list_jobs(status: JobStatusValue | None = None, db: Session = Depends(get_db)):
     query = db.query(Job)
     if status:
         query = query.filter(Job.status == status)
     return query.order_by(Job.id.desc()).all()
 
 
-@router.get("/{vacante_id}", response_model=JobOut, summary="Obtener vacante")
-def get_job(job_id: int = JobId, db: Session = Depends(get_db)):
+@router.get("/{job_id}", response_model=JobOut, summary="Obtener vacante")
+def get_job(job_id: int, db: Session = Depends(get_db)):
     return get_job_or_404(db, job_id)
 
 
-@router.put("/{vacante_id}", response_model=JobOut, summary="Actualizar vacante")
-def update_job(data: JobCreate, job_id: int = JobId, db: Session = Depends(get_db)):
+@router.put("/{job_id}", response_model=JobOut, summary="Actualizar vacante")
+def update_job(job_id: int, data: JobCreate, db: Session = Depends(get_db)):
     job = get_job_or_404(db, job_id)
     apply_data(job, data)
     db.commit()
@@ -65,8 +64,8 @@ def update_job(data: JobCreate, job_id: int = JobId, db: Session = Depends(get_d
     return job
 
 
-@router.patch("/{vacante_id}/estado", response_model=JobOut, summary="Cambiar estado de la vacante")
-def change_status(data: JobStatus, job_id: int = JobId, db: Session = Depends(get_db)):
+@router.patch("/{job_id}/status", response_model=JobOut, summary="Abrir o cerrar vacante")
+def change_status(job_id: int, data: JobStatus, db: Session = Depends(get_db)):
     job = get_job_or_404(db, job_id)
     job.status = data.status
     db.commit()
@@ -74,11 +73,11 @@ def change_status(data: JobStatus, job_id: int = JobId, db: Session = Depends(ge
     return job
 
 
-@router.delete("/{vacante_id}", summary="Eliminar vacante")
-def delete_job(job_id: int = JobId, db: Session = Depends(get_db)):
+@router.delete("/{job_id}", summary="Eliminar vacante")
+def delete_job(job_id: int, db: Session = Depends(get_db)):
     job = get_job_or_404(db, job_id)
     # Applications depend on the job, so they are deleted along with it
     deleted = db.query(Application).filter(Application.job_id == job_id).delete()
     db.delete(job)
     db.commit()
-    return {"mensaje": "Vacante eliminada", "postulaciones_eliminadas": deleted}
+    return {"message": "Vacante eliminada", "deleted_applications": deleted}

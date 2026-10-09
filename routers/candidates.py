@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -9,9 +9,7 @@ from schemas.candidate import CandidateCreate, CandidateOut
 from services.profile import extract_education_level, extract_experience_years
 from services.skills import canonicalize_skills, extract_skills
 
-router = APIRouter(prefix="/candidatos", tags=["Candidatos"])
-
-CandidateId = Path(alias="candidato_id")
+router = APIRouter(prefix="/candidates", tags=["Candidatos"])
 
 
 def fill_profile(candidate: Candidate, data: CandidateCreate) -> None:
@@ -43,6 +41,7 @@ def get_candidate_or_404(db: Session, candidate_id: int) -> Candidate:
 
 @router.post("", response_model=CandidateOut, status_code=201, summary="Crear candidato")
 def create_candidate(data: CandidateCreate, db: Session = Depends(get_db)):
+    """Las habilidades, la experiencia y el nivel educativo que no se envíen se extraen de la hoja de vida."""
     if email_in_use(db, data.email):
         raise HTTPException(status_code=409, detail="Ya existe un candidato con ese correo")
     candidate = Candidate()
@@ -54,7 +53,7 @@ def create_candidate(data: CandidateCreate, db: Session = Depends(get_db)):
 
 
 @router.get("", response_model=list[CandidateOut], summary="Listar candidatos")
-def list_candidates(skill: str | None = Query(None, alias="habilidad"), db: Session = Depends(get_db)):
+def list_candidates(skill: str | None = None, db: Session = Depends(get_db)):
     candidates = db.query(Candidate).order_by(Candidate.id).all()
     if skill:
         wanted = canonicalize_skills([skill])
@@ -63,13 +62,13 @@ def list_candidates(skill: str | None = Query(None, alias="habilidad"), db: Sess
     return candidates
 
 
-@router.get("/{candidato_id}", response_model=CandidateOut, summary="Obtener candidato")
-def get_candidate(candidate_id: int = CandidateId, db: Session = Depends(get_db)):
+@router.get("/{candidate_id}", response_model=CandidateOut, summary="Obtener candidato")
+def get_candidate(candidate_id: int, db: Session = Depends(get_db)):
     return get_candidate_or_404(db, candidate_id)
 
 
-@router.put("/{candidato_id}", response_model=CandidateOut, summary="Actualizar candidato")
-def update_candidate(data: CandidateCreate, candidate_id: int = CandidateId, db: Session = Depends(get_db)):
+@router.put("/{candidate_id}", response_model=CandidateOut, summary="Actualizar candidato")
+def update_candidate(candidate_id: int, data: CandidateCreate, db: Session = Depends(get_db)):
     candidate = get_candidate_or_404(db, candidate_id)
     if email_in_use(db, data.email, exclude_id=candidate_id):
         raise HTTPException(status_code=409, detail="Ya existe otro candidato con ese correo")
@@ -79,10 +78,10 @@ def update_candidate(data: CandidateCreate, candidate_id: int = CandidateId, db:
     return candidate
 
 
-@router.delete("/{candidato_id}", summary="Eliminar candidato")
-def delete_candidate(candidate_id: int = CandidateId, db: Session = Depends(get_db)):
+@router.delete("/{candidate_id}", summary="Eliminar candidato")
+def delete_candidate(candidate_id: int, db: Session = Depends(get_db)):
     candidate = get_candidate_or_404(db, candidate_id)
     deleted = db.query(Application).filter(Application.candidate_id == candidate_id).delete()
     db.delete(candidate)
     db.commit()
-    return {"mensaje": "Candidato eliminado", "postulaciones_eliminadas": deleted}
+    return {"message": "Candidato eliminado", "deleted_applications": deleted}

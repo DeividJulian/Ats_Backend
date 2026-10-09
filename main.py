@@ -83,7 +83,7 @@ async def database_error(request: Request, exc: SQLAlchemyError):
 
 @app.get("/", tags=["Sistema"], summary="Inicio")
 def root():
-    return {"mensaje": "API del Portal ATS funcionando"}
+    return {"message": "API del Portal ATS funcionando"}
 
 
 @app.get("/health", tags=["Sistema"], summary="Estado del servicio")

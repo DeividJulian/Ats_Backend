@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, HTTPException, Path, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -8,15 +8,11 @@ from services.profile import extract_education_level, extract_experience_years
 from services.resume import InvalidResumeError, extract_pdf_text
 from services.skills import extract_skills
 
-router = APIRouter(prefix="/candidatos", tags=["Hojas de vida"])
+router = APIRouter(prefix="/candidates", tags=["Hojas de vida"])
 
 
-@router.post("/{candidato_id}/cv", response_model=CandidateOut, summary="Subir hoja de vida en PDF")
-async def upload_resume(
-    candidate_id: int = Path(alias="candidato_id"),
-    file: UploadFile = File(alias="archivo"),
-    db: Session = Depends(get_db),
-):
+@router.post("/{candidate_id}/resume", response_model=CandidateOut, summary="Subir hoja de vida en PDF")
+async def upload_resume(candidate_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
     """Recibe un PDF, extrae su texto y actualiza el perfil del candidato con lo que detecte."""
     candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
     if not candidate:
