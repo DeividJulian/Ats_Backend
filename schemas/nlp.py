@@ -10,6 +10,9 @@ class TextInput(BaseModel):
 
 
 class TextAnalysis(BaseModel):
+    name: str | None = None
+    email: str | None = None
+    phone: str | None = None
     skills: list[str]
     experience_years: int
     education_level: str | None

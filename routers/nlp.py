@@ -1,27 +1,18 @@
-from collections import Counter
 
 from fastapi import APIRouter, Depends
 
 from schemas.nlp import ComparisonInput, ComparisonOutput, TextAnalysis, TextInput
 from services.auth import staff_only
-from services.nlp import tokenize
-from services.profile import extract_education_level, extract_experience_years
+from services.resume import analyze_resume_text
 from services.similarity import cosine_similarity
-from services.skills import extract_skills
 
 router = APIRouter(prefix="/nlp", tags=["NLP"], dependencies=[Depends(staff_only)])
 
 
 @router.post("/analyze-text", response_model=TextAnalysis, summary="Analizar texto")
 def analyze_text(data: TextInput):
-    """Extrae habilidades, experiencia y nivel educativo de cualquier texto (hoja de vida o vacante)."""
-    frequencies = Counter(tokenize(data.text))
-    return TextAnalysis(
-        skills=extract_skills(data.text),
-        experience_years=extract_experience_years(data.text),
-        education_level=extract_education_level(data.text),
-        key_terms=[t for t, _ in frequencies.most_common(8)],
-    )
+    """Extrae datos de contacto, habilidades, experiencia y nivel educativo de un texto (hoja de vida o vacante)."""
+    return TextAnalysis(**analyze_resume_text(data.text))
 
 
 @router.post("/similarity", response_model=ComparisonOutput, summary="Comparar textos")

@@ -64,3 +64,10 @@ def test_similarity_endpoint(client):
 def test_skill_names_keep_spanish_accents_and_order():
     assert extract_skills("Manejo de nomina, facturacion y analisis de datos") == ["análisis de datos", "facturación", "nómina"]
     assert canonicalize_skills(["Atencion al cliente", "Diseño gráfico"]) == ["atención al cliente", "diseño gráfico"]
+
+
+def test_analyze_text_detects_contact_data(client):
+    text = "LUIS MORA DIAZ\nCel +57 310 555 1234 - luis.mora@example.com\nContador con 6 años de experiencia en Excel"
+    body = client.post("/nlp/analyze-text", json={"text": text}).json()
+    assert (body["name"], body["email"], body["phone"]) == ("Luis Mora Diaz", "luis.mora@example.com", "+57 310 555 1234")
+    assert body["experience_years"] == 6 and "excel" in body["skills"]
