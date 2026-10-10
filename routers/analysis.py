@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from database import get_db
+from services.auth import staff_only
 from services.stats import compute_statistics
 
-router = APIRouter(tags=["Análisis"])
+router = APIRouter(tags=["Análisis"], dependencies=[Depends(staff_only)])
 
 
 @router.get("/stats", summary="Estadísticas del proceso de selección")

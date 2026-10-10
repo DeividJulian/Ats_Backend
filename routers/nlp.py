@@ -1,14 +1,15 @@
 from collections import Counter
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from schemas.nlp import ComparisonInput, ComparisonOutput, TextAnalysis, TextInput
+from services.auth import staff_only
 from services.nlp import tokenize
 from services.profile import extract_education_level, extract_experience_years
 from services.similarity import cosine_similarity
 from services.skills import extract_skills
 
-router = APIRouter(prefix="/nlp", tags=["NLP"])
+router = APIRouter(prefix="/nlp", tags=["NLP"], dependencies=[Depends(staff_only)])
 
 
 @router.post("/analyze-text", response_model=TextAnalysis, summary="Analizar texto")

@@ -6,10 +6,11 @@ from database import get_db
 from models.application import Application
 from models.candidate import Candidate
 from schemas.candidate import CandidateCreate, CandidateOut
+from services.auth import staff_only
 from services.profile import extract_education_level, extract_experience_years
 from services.skills import canonicalize_skills, extract_skills, sort_skills
 
-router = APIRouter(prefix="/candidates", tags=["Candidatos"])
+router = APIRouter(prefix="/candidates", tags=["Candidatos"], dependencies=[Depends(staff_only)])
 
 
 def fill_profile(candidate: Candidate, data: CandidateCreate) -> None:

@@ -26,7 +26,7 @@ El código y la API (rutas y campos JSON) están en inglés. Los mensajes de err
 ├── database.py          # Conexión y sesión de base de datos
 ├── errors.py            # Mensajes de error en español
 ├── render.yaml          # Configuración de despliegue en Render
-├── models/              # Tablas: jobs, candidates, applications
+├── models/              # Tablas: users, jobs, candidates, applications
 ├── schemas/             # Validación de entrada y salida
 ├── routers/             # Endpoints agrupados por recurso
 ├── services/
@@ -41,10 +41,13 @@ El código y la API (rutas y campos JSON) están en inglés. Los mensajes de err
 │   ├── llm.py           # Cliente de la API de Claude con salidas estructuradas
 │   ├── ai.py            # Evaluación, extracción de perfil y redacción de vacantes con Claude
 │   ├── resume.py        # Lectura y análisis de hojas de vida en PDF
+│   ├── security.py      # Contraseñas (scrypt) y tokens de sesión (JWT)
+│   ├── auth.py          # Usuario de la petición y permisos por rol
+│   ├── bootstrap.py     # Crea el primer administrador desde variables de entorno
 │   ├── pipeline.py      # Flujo de estados de la postulación
 │   ├── stats.py         # Embudo y brechas de talento
 │   └── seed.py          # Datos de demostración
-└── tests/               # 68 pruebas automatizadas
+└── tests/               # 104 pruebas automatizadas
 ```
 
 ## Instalación y ejecución local
@@ -62,6 +65,8 @@ Crea un archivo `.env` copiando `.env.example`:
 | `DATABASE_URL` | Cadena de conexión de PostgreSQL. Se puede pegar tal cual la que da Neon (`postgresql://...`). Para pruebas rápidas también sirve SQLite: `sqlite:///./ats.db` |
 | `ALLOWED_ORIGINS` | Orígenes que pueden llamar a la API, separados por comas (la URL del front). `*` permite todos |
 | `ALLOW_DATA_RESET` | `true` permite `POST /seed?reset=true`, que **borra todos los datos**. Déjalo en `false` en producción |
+| `JWT_SECRET` | Clave para firmar las sesiones (32 caracteres o más). Si falta, se genera una temporal y las sesiones se cierran al reiniciar |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Primer administrador: se crea al arrancar si no existe |
 | `ANTHROPIC_API_KEY` | Clave de la API de Claude. Opcional: sin ella los endpoints `/ai` responden 503 y todo lo demás funciona |
 | `ANTHROPIC_MODEL` | Opcional. Modelo de Claude a usar (por defecto `claude-opus-5-5`) |
 
@@ -75,11 +80,23 @@ Documentación interactiva: `http://127.0.0.1:8000/docs`. Para ver el sistema co
 
 1. Entra a [render.com](https://render.com) con tu cuenta de GitHub.
 2. **New → Blueprint** y elige este repositorio. Render lee `render.yaml` y crea el servicio `ats-backend` (plan gratis, región Virginia, la misma zona de AWS que la base en Neon).
-3. Cuando lo pida, pega en `DATABASE_URL` la cadena de conexión de Neon y, si vas a usar Claude, la clave en `ANTHROPIC_API_KEY` (puedes dejarla vacía).
+3. Cuando lo pida, pega en `DATABASE_URL` la cadena de conexión de Neon, el correo y la contraseña del primer administrador en `ADMIN_EMAIL` y `ADMIN_PASSWORD` y, si vas a usar Claude, la clave en `ANTHROPIC_API_KEY` (puedes dejarla vacía). `JWT_SECRET` lo genera Render solo.
 4. Al terminar el despliegue, abre `https://<tu-servicio>.onrender.com/docs`.
 5. Cuando el front esté publicado, cambia `ALLOWED_ORIGINS` a su URL en **Environment**.
 
 En el plan gratis el servicio se duerme tras 15 minutos sin tráfico y la primera petición después tarda cerca de un minuto. Cada `git push` a `main` vuelve a desplegar automáticamente.
+
+## Usuarios y roles
+
+Las peticiones llevan el token de sesión en la cabecera `Authorization: Bearer <token>`, que se obtiene en `POST /auth/login` y dura 12 horas. Las contraseñas se guardan cifradas con scrypt.
+
+| Rol | Qué puede hacer |
+|---|---|
+| `admin` | Todo, incluida la gestión de usuarios y la carga de datos de demostración |
+| `recruiter` | Vacantes, candidatos, postulaciones, ranking, estadísticas e IA |
+| `candidate` | Se registra solo, ve las vacantes abiertas, se postula, sube su hoja de vida y sigue sus postulaciones (sin ver el puntaje) |
+
+`POST /seed` crea dos cuentas de prueba con la contraseña `Demo1234`: `reclutador@demo.com` (reclutador) y `camila.ortega@example.com` (candidata). Los administradores solo se crean con `ADMIN_EMAIL` / `ADMIN_PASSWORD` o desde `POST /users`.
 
 ## Cómo funciona la IA
 
@@ -120,7 +137,11 @@ Protecciones: las respuestas usan salidas estructuradas (el modelo solo puede de
 | IA con Claude | `GET /ai/status`, `POST /ai/evaluate/{application_id}`, `POST /ai/extract-resume`, `POST /ai/draft-job` |
 | NLP | `POST /nlp/analyze-text`, `POST /nlp/similarity` |
 | Análisis | `GET /stats` |
-| Utilidades | `POST /seed?reset=`, `GET /health` |
+| Autenticación | `POST /auth/login`, `POST /auth/register` (candidatos), `GET /auth/me` |
+| Usuarios (admin) | `GET /users`, `POST /users`, `PATCH /users/{id}`, `DELETE /users/{id}` |
+| Portal del candidato | `GET/PUT /me/profile`, `POST /me/resume`, `GET /me/insights`, `GET /me/recommended-jobs`, `GET/POST /me/applications`, `DELETE /me/applications/{id}` |
+| Público (sin sesión) | `GET /public/jobs`, `GET /public/jobs/{id}`, `GET /public/summary` |
+| Utilidades | `POST /seed?reset=` (admin), `GET /health` |
 
 ### Valores
 
@@ -134,7 +155,8 @@ Todos responden `{"detail": "mensaje"}` en español:
 
 | Código | Significado |
 |---|---|
-| `403` | Acción deshabilitada en este entorno (reinicio de datos) |
+| `401` | Falta iniciar sesión, o el token no es válido o expiró |
+| `403` | El rol no tiene permiso, el usuario está desactivado o la acción está deshabilitada en este entorno |
 | `404` | El recurso no existe |
 | `409` | Conflicto: correo duplicado, postulación repetida, vacante cerrada, cambio de estado no permitido o datos ya cargados en `/seed` |
 | `422` | Datos inválidos o PDF ilegible; el mensaje indica el problema, por ejemplo `name: debe tener al menos 2 caracteres` |

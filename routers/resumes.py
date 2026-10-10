@@ -6,11 +6,10 @@ from database import get_db
 from models.candidate import Candidate
 from schemas.candidate import CandidateOut
 from schemas.nlp import ResumeAnalysis
-from services.profile import extract_education_level, extract_experience_years
-from services.resume import InvalidResumeError, analyze_resume_text, extract_pdf_text
-from services.skills import extract_skills, sort_skills
+from services.auth import staff_only
+from services.resume import InvalidResumeError, analyze_resume_text, apply_resume_text, extract_pdf_text
 
-router = APIRouter(tags=["Hojas de vida"])
+router = APIRouter(tags=["Hojas de vida"], dependencies=[Depends(staff_only)])
 
 
 async def read_pdf_or_422(file: UploadFile) -> str:
@@ -62,11 +61,7 @@ async def upload_resume(candidate_id: int, file: UploadFile = File(...), db: Ses
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidato no encontrado")
 
-    text = await read_pdf_or_422(file)
-    candidate.resume_text = text[:20000]
-    candidate.skills = sort_skills((candidate.skills or []) + extract_skills(text))
-    candidate.experience_years = max(candidate.experience_years or 0, extract_experience_years(text))
-    candidate.education_level = candidate.education_level or extract_education_level(text)
+    apply_resume_text(candidate, await read_pdf_or_422(file))
     db.commit()
     db.refresh(candidate)
     return candidate

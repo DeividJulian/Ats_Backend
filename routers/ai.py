@@ -6,9 +6,10 @@ from models.application import Application
 from schemas.ai import AIEvaluation, AIResumeProfile, AIStatus, DraftJobInput, JobDraft
 from schemas.nlp import TextInput
 from services import ai, llm
+from services.auth import staff_only
 from services.matching import candidate_to_dict, job_to_dict
 
-router = APIRouter(prefix="/ai", tags=["IA (Claude)"])
+router = APIRouter(prefix="/ai", tags=["IA (Claude)"], dependencies=[Depends(staff_only)])
 
 
 def _run(function, *args):

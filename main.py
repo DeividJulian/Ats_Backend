@@ -13,8 +13,9 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import models  # noqa: F401  (registers every table)
 import routers
-from database import Base, engine
+from database import Base, SessionLocal, engine
 from errors import http_message, validation_message
+from services.bootstrap import ensure_admin
 
 logging.basicConfig(
     level=logging.INFO,
@@ -24,6 +25,9 @@ logging.basicConfig(
 logger = logging.getLogger("ats.api")
 
 Base.metadata.create_all(bind=engine)
+
+with SessionLocal() as db:
+    ensure_admin(db)
 
 app = FastAPI(title="Portal ATS para pymes", version="1.0.0")
 

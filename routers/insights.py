@@ -6,9 +6,10 @@ from models.application import Application
 from models.candidate import Candidate
 from models.job import Job
 from schemas.insights import CandidateInsights, InterviewGuide
+from services.auth import staff_only
 from services.insights import candidate_insights, interview_guide
 
-router = APIRouter(tags=["IA"])
+router = APIRouter(tags=["IA"], dependencies=[Depends(staff_only)])
 
 
 @router.get("/candidates/{candidate_id}/insights", response_model=CandidateInsights, summary="Análisis del candidato")

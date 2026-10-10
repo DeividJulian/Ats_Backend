@@ -3,12 +3,15 @@ import os
 # IMPORTANT: set BEFORE importing the app so the tests never touch the real database
 os.environ["DATABASE_URL"] = "sqlite:///./test_ats.db"
 os.environ["ALLOW_DATA_RESET"] = "true"
+os.environ["JWT_SECRET"] = "test-secret-for-pytest-only-0123456789abcdef"
 
 import pytest
 from fastapi.testclient import TestClient
 
-from database import Base, engine
+from database import Base, SessionLocal, engine
 from main import app
+from models.user import User
+from services.security import create_token, hash_password
 
 assert str(engine.url).startswith("sqlite"), "Tests must only run against SQLite"
 
@@ -20,9 +23,38 @@ def clean_database():
     yield
 
 
+ADMIN = {"name": "Admin Pruebas", "email": "admin@test.com", "password": "Admin1234"}
+
+
 @pytest.fixture
-def client():
+def admin_id():
+    with SessionLocal() as db:
+        user = User(name=ADMIN["name"], email=ADMIN["email"], password_hash=hash_password(ADMIN["password"]), role="admin")
+        db.add(user)
+        db.commit()
+        return user.id
+
+
+def client_for(user_id: int, role: str) -> TestClient:
+    return TestClient(app, headers={"Authorization": f"Bearer {create_token(user_id, role)}"})
+
+
+@pytest.fixture
+def client(admin_id):
+    """Logged in as an administrator, who can use every endpoint."""
+    return client_for(admin_id, "admin")
+
+
+@pytest.fixture
+def anon():
+    """No session at all."""
     return TestClient(app)
+
+
+def login(email: str, password: str) -> TestClient:
+    r = TestClient(app).post("/auth/login", json={"email": email, "password": password})
+    assert r.status_code == 200, r.text
+    return TestClient(app, headers={"Authorization": f"Bearer {r.json()['access_token']}"})
 
 
 @pytest.fixture

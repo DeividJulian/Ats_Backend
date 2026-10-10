@@ -8,7 +8,7 @@ from pypdf.errors import PyPdfError
 from services.contact import extract_email, extract_name, extract_phone
 from services.nlp import tokenize
 from services.profile import extract_education_level, extract_experience_years
-from services.skills import extract_skills
+from services.skills import extract_skills, sort_skills
 
 MAX_BYTES = 5 * 1024 * 1024
 
@@ -46,3 +46,11 @@ def analyze_resume_text(text: str) -> dict:
         "education_level": extract_education_level(text),
         "key_terms": [t for t, _ in Counter(tokenize(text)).most_common(8)],
     }
+
+
+def apply_resume_text(candidate, text: str) -> None:
+    """Stores the resume text and adds what it reveals to the candidate's profile (never removes data)."""
+    candidate.resume_text = text[:20000]
+    candidate.skills = sort_skills((candidate.skills or []) + extract_skills(text))
+    candidate.experience_years = max(candidate.experience_years or 0, extract_experience_years(text))
+    candidate.education_level = candidate.education_level or extract_education_level(text)

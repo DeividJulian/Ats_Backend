@@ -17,3 +17,11 @@ services:
         value: "false"
       - key: ANTHROPIC_API_KEY
         sync: false
+      # Signs the session tokens; Render generates a random value once
+      - key: JWT_SECRET
+        generateValue: true
+      # First administrator, created on startup if it doesn't exist
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false

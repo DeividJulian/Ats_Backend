@@ -6,10 +6,11 @@ from models.application import Application
 from models.candidate import Candidate
 from models.job import Job
 from schemas.application import ApplicationCreate, ApplicationOut, ApplicationStatus, ApplicationStatusValue
+from services.auth import staff_only
 from services.matching import evaluate
 from services.pipeline import STATUS_LABELS, is_valid_transition, next_statuses
 
-router = APIRouter(prefix="/applications", tags=["Postulaciones"])
+router = APIRouter(prefix="/applications", tags=["Postulaciones"], dependencies=[Depends(staff_only)])
 
 
 def get_application_or_404(db: Session, application_id: int) -> Application:
@@ -19,11 +20,10 @@ def get_application_or_404(db: Session, application_id: int) -> Application:
     return application
 
 
-@router.post("", response_model=ApplicationOut, status_code=201, summary="Postular candidato")
-def apply(data: ApplicationCreate, db: Session = Depends(get_db)):
-    """Postula un candidato a una vacante y calcula su puntaje de ajuste al instante."""
-    job = db.query(Job).filter(Job.id == data.job_id).first()
-    candidate = db.query(Candidate).filter(Candidate.id == data.candidate_id).first()
+def create_application(db: Session, job_id: int, candidate_id: int) -> Application:
+    """Applies a candidate to an open job and scores the fit right away (shared with the candidate portal)."""
+    job = db.query(Job).filter(Job.id == job_id).first()
+    candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
     if not job or not candidate:
         raise HTTPException(status_code=404, detail="Vacante o candidato no encontrado")
     if job.status != "open":
@@ -31,7 +31,7 @@ def apply(data: ApplicationCreate, db: Session = Depends(get_db)):
 
     already_applied = (
         db.query(Application)
-        .filter(Application.job_id == data.job_id, Application.candidate_id == data.candidate_id)
+        .filter(Application.job_id == job_id, Application.candidate_id == candidate_id)
         .first()
     )
     if already_applied:
@@ -49,6 +49,12 @@ def apply(data: ApplicationCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(application)
     return application
+
+
+@router.post("", response_model=ApplicationOut, status_code=201, summary="Postular candidato")
+def apply(data: ApplicationCreate, db: Session = Depends(get_db)):
+    """Postula un candidato a una vacante y calcula su puntaje de ajuste al instante."""
+    return create_application(db, data.job_id, data.candidate_id)
 
 
 @router.get("", response_model=list[ApplicationOut], summary="Listar postulaciones")

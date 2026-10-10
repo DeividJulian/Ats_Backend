@@ -6,9 +6,10 @@ from models.application import Application
 from models.candidate import Candidate
 from models.job import Job
 from schemas.application import ApplicationOut, JobRecommendation, RankingItem, Suggestion
-from services.matching import evaluate, system_corpus
+from services.auth import staff_only
+from services.matching import evaluate, recommend_jobs, system_corpus
 
-router = APIRouter(tags=["Ranking"])
+router = APIRouter(tags=["Ranking"], dependencies=[Depends(staff_only)])
 
 
 def _job_or_404(db: Session, job_id: int) -> Job:
@@ -125,24 +126,4 @@ def recommended_jobs(
     candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidato no encontrado")
-    applied = {a.job_id for a in db.query(Application).filter(Application.candidate_id == candidate_id)}
-    corpus = system_corpus(db)
-
-    recommendations = []
-    for job in db.query(Job).filter(Job.status == "open").all():
-        if job.id in applied:
-            continue
-        r = evaluate(db, job, candidate, corpus)
-        if r["score"] >= min_score:
-            recommendations.append(
-                JobRecommendation(
-                    job_id=job.id,
-                    title=job.title,
-                    score=r["score"],
-                    classification=r["classification"],
-                    matching_skills=r["matching_skills"],
-                    missing_skills=r["missing_skills"],
-                )
-            )
-    recommendations.sort(key=lambda j: j.score, reverse=True)
-    return recommendations[:limit]
+    return recommend_jobs(db, candidate, limit, min_score)

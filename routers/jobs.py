@@ -5,9 +5,10 @@ from database import get_db
 from models.application import Application
 from models.job import Job
 from schemas.job import JobCreate, JobOut, JobStatus, JobStatusValue
+from services.auth import staff_only
 from services.skills import canonicalize_skills, extract_skills
 
-router = APIRouter(prefix="/jobs", tags=["Vacantes"])
+router = APIRouter(prefix="/jobs", tags=["Vacantes"], dependencies=[Depends(staff_only)])
 
 
 def apply_data(job: Job, data: JobCreate) -> None:
