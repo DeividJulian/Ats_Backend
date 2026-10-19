@@ -15,8 +15,13 @@ services:
         value: "*"
       - key: ALLOW_DATA_RESET
         value: "false"
-      - key: ANTHROPIC_API_KEY
+      # Optional language model: Gemini by default (free tier); the key is entered in Render, never in the repo
+      - key: AI_PROVIDER
+        value: gemini
+      - key: AI_API_KEY
         sync: false
+      - key: AI_MODEL
+        value: gemini-3.8-flash
       # Signs the session tokens; Render generates a random value once
       - key: JWT_SECRET
         generateValue: true

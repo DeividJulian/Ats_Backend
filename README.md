@@ -1,11 +1,11 @@
 # Portal ATS para pymes — Backend
 
-API que permite publicar vacantes, registrar candidatos y **ordenarlos automáticamente según su ajuste al cargo** usando procesamiento de lenguaje natural (NLP) implementado desde cero. Opcionalmente, un modelo de lenguaje (Claude) redacta evaluaciones, extrae perfiles y propone vacantes.
+API que permite publicar vacantes, registrar candidatos y **ordenarlos automáticamente según su ajuste al cargo** usando procesamiento de lenguaje natural (NLP) implementado desde cero. Opcionalmente, un modelo de lenguaje (Gemini por defecto, gratis; también Groq o Claude) redacta evaluaciones, extrae perfiles y propone vacantes.
+
+- **Frontend:** https://github.com/DeividJulian/Ats_Front (Angular) · https://ats-front-six.vercel.app
+- **API desplegada:** https://ats-backend-xtp7.onrender.com
 
 Proyecto final de Programación Orientada a la Web — Universidad Cooperativa de Colombia.
-
-- **Frontend:** `<URL del repositorio del frontend>` (Angular)
-- **API desplegada:** `<URL del backend en Render>`
 
 ## Tecnologías
 
@@ -13,7 +13,7 @@ Proyecto final de Programación Orientada a la Web — Universidad Cooperativa d
 - SQLAlchemy 2 + PostgreSQL en [Neon](https://neon.com) (psycopg v3)
 - Pydantic v2 para validación
 - pypdf para leer hojas de vida en PDF
-- SDK oficial de Anthropic para la IA con Claude (opcional)
+- Modelo de lenguaje opcional e intercambiable: Gemini o Groq (por su endpoint compatible con OpenAI, vía httpx2) o Claude (SDK oficial de Anthropic)
 - pytest para pruebas
 - Despliegue en [Render](https://render.com)
 
@@ -38,8 +38,9 @@ El código y la API (rutas y campos JSON) están en inglés. Los mensajes de err
 │   ├── scoring.py       # Puntaje de ajuste explicable
 │   ├── matching.py      # Une base de datos y puntaje
 │   ├── insights.py      # Resumen del perfil, guía de entrevista y formación sugerida
-│   ├── llm.py           # Cliente de la API de Claude con salidas estructuradas
-│   ├── ai.py            # Evaluación, extracción de perfil y redacción de vacantes con Claude
+│   ├── llm.py           # Cliente de IA independiente del proveedor (Gemini, Groq o Claude) con salidas estructuradas
+│   ├── ai.py            # Evaluación, extracción de perfil y redacción de vacantes con IA
+│   ├── privacy.py       # Oculta nombre, correo y teléfono antes de enviar texto a la IA
 │   ├── resume.py        # Lectura y análisis de hojas de vida en PDF
 │   ├── security.py      # Contraseñas (scrypt) y tokens de sesión (JWT)
 │   ├── auth.py          # Usuario de la petición y permisos por rol
@@ -47,7 +48,7 @@ El código y la API (rutas y campos JSON) están en inglés. Los mensajes de err
 │   ├── pipeline.py      # Flujo de estados de la postulación
 │   ├── stats.py         # Embudo y brechas de talento
 │   └── seed.py          # Datos de demostración
-└── tests/               # 104 pruebas automatizadas
+└── tests/               # 129 pruebas automatizadas
 ```
 
 ## Instalación y ejecución local
@@ -67,8 +68,10 @@ Crea un archivo `.env` copiando `.env.example`:
 | `ALLOW_DATA_RESET` | `true` permite `POST /seed?reset=true`, que **borra todos los datos**. Déjalo en `false` en producción |
 | `JWT_SECRET` | Clave para firmar las sesiones (32 caracteres o más). Si falta, se genera una temporal y las sesiones se cierran al reiniciar |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Primer administrador: se crea al arrancar si no existe |
-| `ANTHROPIC_API_KEY` | Clave de la API de Claude. Opcional: sin ella los endpoints `/ai` responden 503 y todo lo demás funciona |
-| `ANTHROPIC_MODEL` | Opcional. Modelo de Claude a usar (por defecto `claude-opus-5-5`) |
+| `AI_PROVIDER` | Proveedor de IA: `gemini` (por defecto), `groq` o `anthropic` |
+| `AI_API_KEY` | Clave de ese proveedor. Opcional: sin ella los endpoints `/ai` responden 503 y todo lo demás funciona |
+| `AI_MODEL` | Opcional. Modelo a usar (por defecto `gemini-3.8-flash`, `openai/gpt-oss-20b` en Groq o `claude-opus-5-5` en Anthropic) |
+| `AI_BASE_URL` | Opcional. Otra dirección para el endpoint (por defecto la oficial de cada proveedor) |
 
 ```
 uvicorn main:app --reload
@@ -80,7 +83,7 @@ Documentación interactiva: `http://127.0.0.1:8000/docs`. Para ver el sistema co
 
 1. Entra a [render.com](https://render.com) con tu cuenta de GitHub.
 2. **New → Blueprint** y elige este repositorio. Render lee `render.yaml` y crea el servicio `ats-backend` (plan gratis, región Virginia, la misma zona de AWS que la base en Neon).
-3. Cuando lo pida, pega en `DATABASE_URL` la cadena de conexión de Neon, el correo y la contraseña del primer administrador en `ADMIN_EMAIL` y `ADMIN_PASSWORD` y, si vas a usar Claude, la clave en `ANTHROPIC_API_KEY` (puedes dejarla vacía). `JWT_SECRET` lo genera Render solo.
+3. Cuando lo pida, pega en `DATABASE_URL` la cadena de conexión de Neon, el correo y la contraseña del primer administrador en `ADMIN_EMAIL` y `ADMIN_PASSWORD` y, si vas a usar IA, la clave en `AI_API_KEY` (puedes dejarla vacía). `AI_PROVIDER` y `AI_MODEL` ya vienen con `gemini` y `gemini-3.8-flash`. `JWT_SECRET` lo genera Render solo.
 4. Al terminar el despliegue, abre `https://<tu-servicio>.onrender.com/docs`.
 5. Cuando el front esté publicado, cambia `ALLOWED_ORIGINS` a su URL en **Environment**.
 
@@ -114,15 +117,33 @@ Todo el procesamiento de lenguaje está implementado desde cero, sin librerías 
 
 Clasificación: `high` (≥ 75), `medium` (≥ 50), `low` (< 50).
 
-### IA con Claude (opcional)
+### IA con un modelo de lenguaje (opcional)
 
-Con `ANTHROPIC_API_KEY` configurada, un modelo de lenguaje complementa el NLP propio. **El puntaje sigue siendo el determinista**: Claude asesora y redacta, no decide.
+**El núcleo funciona sin IA externa**: la lectura de PDF, la extracción del perfil, el puntaje y el ranking son del NLP propio. Con `AI_API_KEY` configurada, un modelo de lenguaje lo complementa. **El puntaje sigue siendo el determinista**: el modelo asesora y redacta, no decide.
 
 - **Evaluación de una postulación:** resumen, fortalezas, brechas, recomendación (`advance`, `interview_with_reservations` o `reject`) y preguntas de entrevista.
 - **Extracción de perfil:** habilidades, experiencia, nivel educativo y resumen a partir del texto de una hoja de vida.
 - **Redacción de vacantes:** borrador de descripción, requisitos y habilidades a partir del cargo y unas notas.
 
-Protecciones: las respuestas usan salidas estructuradas (el modelo solo puede devolver el formato esperado y además se validan); la hoja de vida se trata como datos y no como instrucciones, para que nadie escriba "califícame con 100"; se prohíbe usar rasgos protegidos y al modelo nunca le llegan el nombre ni el correo del candidato. Sin clave, `/ai` responde 503; si la API falla, 502. Nunca inventa resultados.
+Protecciones: las respuestas usan salidas estructuradas (el modelo solo puede devolver el formato esperado y además se validan); la hoja de vida se trata como datos y no como instrucciones, para que nadie escriba "califícame con 100"; se prohíbe usar rasgos protegidos y al modelo nunca le llegan el nombre, el correo ni el teléfono del candidato (se reemplazan por `[candidato]`, `[correo]` y `[teléfono]`, incluso dentro del texto de la hoja de vida). Sin clave, `/ai` responde 503; si se alcanza el límite de uso del proveedor, 429; si el proveedor falla o tarda más de 30 s, 502. Nunca inventa resultados.
+
+#### Obtener una clave gratuita de Gemini
+
+1. Entra a [Google AI Studio](https://aistudio.google.com) con tu cuenta de Google.
+2. Haz clic en **Get API key** y crea una clave. El nivel gratuito no pide tarjeta; sus límites por minuto y por día se ven en AI Studio.
+3. Ponla en `AI_API_KEY` (en tu `.env` local y en Render → **Environment**). Nunca la subas al repositorio.
+
+#### Cambiar de proveedor
+
+Solo cambian las variables, no el código:
+
+| Proveedor | `AI_PROVIDER` | `AI_MODEL` por defecto | Clave |
+|---|---|---|---|
+| Google Gemini | `gemini` | `gemini-3.8-flash` | [aistudio.google.com](https://aistudio.google.com) |
+| Groq | `groq` | `openai/gpt-oss-20b` | [console.groq.com](https://console.groq.com) |
+| Anthropic | `anthropic` | `claude-opus-5-5` | [platform.claude.com](https://platform.claude.com) (de pago) |
+
+`GET /ai/status` responde `configured`, `provider` y `model`. Por compatibilidad, si solo existe `ANTHROPIC_API_KEY` se usa Anthropic como antes.
 
 ## Endpoints
 
@@ -134,7 +155,7 @@ Protecciones: las respuestas usan salidas estructuradas (el modelo solo puede de
 | Postulaciones | `POST /applications`, `GET /applications?job_id=&candidate_id=&status=`, `GET /applications/{id}`, `PATCH /applications/{id}/status`, `DELETE /applications/{id}` |
 | Ranking | `GET /jobs/{id}/ranking?blind=`, `GET /jobs/{id}/suggested-candidates`, `GET /candidates/{id}/recommended-jobs`, `POST /applications/{id}/recalculate`, `POST /jobs/{id}/recalculate-ranking` |
 | IA | `GET /candidates/{id}/insights`, `GET /applications/{id}/interview-guide` |
-| IA con Claude | `GET /ai/status`, `POST /ai/evaluate/{application_id}`, `POST /ai/extract-resume`, `POST /ai/draft-job` |
+| IA con modelo de lenguaje | `GET /ai/status`, `POST /ai/evaluate/{application_id}`, `POST /ai/extract-resume`, `POST /ai/draft-job` |
 | NLP | `POST /nlp/analyze-text`, `POST /nlp/similarity` |
 | Análisis | `GET /stats` |
 | Autenticación | `POST /auth/login`, `POST /auth/register` (candidatos), `GET /auth/me` |
@@ -161,12 +182,13 @@ Todos responden `{"detail": "mensaje"}` en español:
 | `409` | Conflicto: correo duplicado, postulación repetida, vacante cerrada, cambio de estado no permitido o datos ya cargados en `/seed` |
 | `422` | Datos inválidos o PDF ilegible; el mensaje indica el problema, por ejemplo `name: debe tener al menos 2 caracteres` |
 | `500` | Error interno de base de datos |
-| `502` | La API de Claude falló o devolvió una respuesta inválida |
-| `503` | La IA con Claude no está configurada (falta `ANTHROPIC_API_KEY`) |
+| `429` | Se alcanzó el límite de uso del proveedor de IA (incluye `Retry-After` si el proveedor lo indica) |
+| `502` | El proveedor de IA falló, tardó demasiado o devolvió una respuesta inválida |
+| `503` | La IA no está configurada (falta `AI_API_KEY` o `AI_PROVIDER` no es válido) |
 
 ## Pruebas
 
-Las pruebas usan su propia base SQLite (`test_ats.db`) y simulan la API de Claude, así que nunca tocan la base real ni gastan saldo:
+Las pruebas usan su propia base SQLite (`test_ats.db`) y simulan el HTTP de cada proveedor de IA (ignoran las claves del `.env`), así que nunca tocan la base real ni gastan cuota:
 
 ```
 pip install -r requirements-dev.txt
