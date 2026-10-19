@@ -18,6 +18,9 @@ def _run(function, *args):
         return function(*args)
     except llm.LLMNotConfigured as e:
         raise HTTPException(status_code=503, detail=f"La IA no está configurada: {e}")
+    except llm.LLMRateLimited as e:
+        headers = {"Retry-After": e.retry_after} if e.retry_after else None
+        raise HTTPException(status_code=429, detail=str(e), headers=headers)
     except llm.LLMError as e:
         raise HTTPException(status_code=502, detail=str(e))
 

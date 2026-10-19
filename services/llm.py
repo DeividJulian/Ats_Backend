@@ -56,6 +56,35 @@ class LLMError(Exception):
     """The API failed or returned an unusable answer. The message is shown to the user, so it is in Spanish."""
 
 
+class LLMRateLimited(LLMError):
+    """The provider's usage limit was reached (HTTP 429). retry_after: seconds to wait, if the provider said."""
+
+    def __init__(self, message: str, retry_after: str | None = None):
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
+def _label(config: "AIConfig") -> str:
+    spec = PROVIDERS.get(config.provider)
+    return spec.label if spec else config.provider
+
+
+def _status_error(config: "AIConfig", status: int, retry_after: str | None = None) -> LLMError:
+    """Same Spanish message for the same problem, whatever the provider."""
+    name = _label(config)
+    if status == 429:
+        return LLMRateLimited(
+            f"Se alcanzó el límite de uso de {name}. Espera unos minutos y vuelve a intentarlo.", retry_after
+        )
+    if status in (401, 403):
+        return LLMError(f"La clave de {name} no es válida o no tiene permisos (revisa AI_API_KEY)")
+    if status == 404:
+        return LLMError(f"{name} no reconoce el modelo configurado (revisa AI_MODEL)")
+    if status >= 500:
+        return LLMError(f"El servicio de {name} no está disponible en este momento ({status}). Intenta más tarde.")
+    return LLMError(f"{name} rechazó la solicitud ({status})")
+
+
 @dataclass(frozen=True)
 class AIConfig:
     provider: str
@@ -118,14 +147,12 @@ def _generate_anthropic(config: AIConfig, system: str, user: str, output_type: t
             betas=[FALLBACK_BETA],
             fallbacks="default",
         )
-    except anthropic.AuthenticationError as e:
-        raise LLMError("La clave de la API de IA no es válida") from e
-    except anthropic.RateLimitError as e:
-        raise LLMError("Se alcanzó el límite de uso de la API de IA; intenta de nuevo en unos minutos") from e
     except anthropic.APIStatusError as e:
-        raise LLMError(f"La API de IA respondió con un error ({e.status_code})") from e
+        raise _status_error(config, e.status_code, e.response.headers.get("retry-after")) from e
+    except anthropic.APITimeoutError as e:
+        raise LLMError(f"{_label(config)} tardó demasiado en responder. Intenta de nuevo.") from e
     except anthropic.APIConnectionError as e:
-        raise LLMError("No se pudo contactar a la API de IA") from e
+        raise LLMError(f"No se pudo contactar a {_label(config)}") from e
     except ValidationError as e:
         raise LLMError("La IA no devolvió una respuesta válida") from e
 
@@ -178,10 +205,16 @@ def _generate_openai_compatible(config: AIConfig, system: str, user: str, output
             "json_schema": {"name": output_type.__name__.strip("_").lower(), "strict": True, "schema": strict_schema(output_type)},
         },
     }
-    response = get_http().post(url, json=body, headers={"Authorization": f"Bearer {config.api_key}"})
+    try:
+        response = get_http().post(url, json=body, headers={"Authorization": f"Bearer {config.api_key}"})
+    except httpx2.TimeoutException as e:
+        raise LLMError(f"{_label(config)} tardó demasiado en responder. Intenta de nuevo.") from e
+    except httpx2.HTTPError as e:
+        raise LLMError(f"No se pudo contactar a {_label(config)}") from e
     if response.status_code != 200:
+        # The provider's message helps to diagnose (it never contains the API key)
         logger.warning("El proveedor %s respondió %s: %s", config.provider, response.status_code, response.text[:300])
-        raise LLMError(f"La API de IA respondió con un error ({response.status_code})")
+        raise _status_error(config, response.status_code, response.headers.get("retry-after"))
 
     try:
         choice = response.json()["choices"][0]

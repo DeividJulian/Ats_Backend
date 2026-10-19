@@ -116,9 +116,9 @@ def test_invalid_answer_returns_502(client, demo_data, claude):
     assert r.status_code == 502
 
 
-@pytest.mark.parametrize("status, expected", [(401, "no es válida"), (429, "límite"), (500, "500")])
-def test_api_errors_return_502(client, demo_data, claude, status, expected):
+@pytest.mark.parametrize("status, code, expected", [(401, 502, "no es válida"), (429, 429, "límite"), (500, 502, "500")])
+def test_api_errors(client, demo_data, claude, status, code, expected):
     claude["reply"] = (status, {"type": "error", "error": {"type": "api_error", "message": "boom"}})
     r = client.post("/ai/evaluate/1")
-    assert r.status_code == 502
+    assert r.status_code == code
     assert expected in r.json()["detail"]
