@@ -216,6 +216,17 @@ def test_evaluation_never_sends_name_email_or_phone(client, demo_data, provider)
     assert "fastapi" in sent and "2021-2024" in sent
 
 
+def test_a_different_name_inside_the_resume_is_hidden_too(client, demo_data, provider):
+    # Someone uploaded another person's PDF to Camila's record: that name must not reach the model either
+    candidate = client.get("/candidates/1").json()
+    other = "Carlos Andrés Ortega Benavides\nContador Público\ncarlos.prueba@example.com · +57 311 987 6543\nContador con 6 años de experiencia."
+    client.put("/candidates/1", json={"name": candidate["name"], "email": candidate["email"], "resume_text": other})
+    client.post("/ai/evaluate/1")
+    sent = json.dumps(provider["requests"][0]["body"], ensure_ascii=False).lower()
+    for private in ("carlos", "andrés", "benavides", "ortega", "carlos.prueba@example.com", "311 987 6543"):
+        assert private not in sent, private
+
+
 def test_resume_extraction_never_sends_contact_data(client, provider):
     provider["reply"] = {"skills": ["python"], "experience_years": 3, "education_level": "professional", "summary": "Perfil."}
     assert client.post("/ai/extract-resume", json={"text": CONTACT_RESUME}).status_code == 200

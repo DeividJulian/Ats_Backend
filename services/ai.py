@@ -4,6 +4,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from services import llm
+from services.contact import extract_name
 from services.privacy import redact_personal_data, redact_resume
 from services.skills import canonicalize_skills
 
@@ -59,7 +60,10 @@ def evaluate_candidate(job: dict, candidate: dict, match: dict, identity: dict |
     identity = identity or {}
     resume = redact_personal_data(
         candidate["resume_text"],
-        names=(identity.get("name"),), emails=(identity.get("email"),), phones=(identity.get("phone"),),
+        # The resume may carry a different name than the registered one (e.g. an uploaded PDF), so both are hidden
+        names=(identity.get("name"), extract_name(candidate["resume_text"])),
+        emails=(identity.get("email"),),
+        phones=(identity.get("phone"),),
     )
     system = (
         "You are a recruiting analyst for a small business. You assess how well a candidate fits a job. "
