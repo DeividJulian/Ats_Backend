@@ -9,23 +9,23 @@ from services import ai, llm
 from services.auth import staff_only
 from services.matching import candidate_to_dict, job_to_dict
 
-router = APIRouter(prefix="/ai", tags=["IA (Claude)"], dependencies=[Depends(staff_only)])
+router = APIRouter(prefix="/ai", tags=["IA"], dependencies=[Depends(staff_only)])
 
 
 def _run(function, *args):
     """Turns model errors into clear HTTP responses."""
     try:
         return function(*args)
-    except llm.LLMNotConfigured:
-        raise HTTPException(status_code=503, detail="La IA no está configurada: falta ANTHROPIC_API_KEY en el servidor")
+    except llm.LLMNotConfigured as e:
+        raise HTTPException(status_code=503, detail=f"La IA no está configurada: {e}")
     except llm.LLMError as e:
         raise HTTPException(status_code=502, detail=str(e))
 
 
 @router.get("/status", response_model=AIStatus, summary="Estado de la IA")
 def ai_status():
-    """Indica si la IA con Claude está configurada y qué modelo usa."""
-    return AIStatus(configured=llm.is_configured(), model=llm.model_name())
+    """Indica si la IA está configurada, con qué proveedor y qué modelo usa."""
+    return AIStatus(configured=llm.is_configured(), provider=llm.provider_name(), model=llm.model_name())
 
 
 @router.post("/evaluate/{application_id}", response_model=AIEvaluation, summary="Evaluar postulación con IA")

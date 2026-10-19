@@ -1,4 +1,4 @@
-"""AI features backed by Claude. The language model advises and drafts; the numeric score stays deterministic."""
+"""AI features backed by a language model. The model advises and drafts; the numeric score stays deterministic."""
 from typing import Literal
 
 from pydantic import BaseModel, Field

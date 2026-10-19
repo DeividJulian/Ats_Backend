@@ -27,7 +27,7 @@ def claude(monkeypatch):
             status, body = state["reply"]
             return httpx2.Response(status, json=body)
         return httpx2.Response(200, json={
-            "id": "msg_test", "type": "message", "role": "assistant", "model": llm.model_name(),
+            "id": "msg_test", "type": "message", "role": "assistant", "model": "claude-opus-5-5",
             "content": [{"type": "text", "text": json.dumps(state["reply"])}],
             "stop_reason": state["stop_reason"], "stop_sequence": None,
             "usage": {"input_tokens": 100, "output_tokens": 50},
@@ -41,9 +41,11 @@ def claude(monkeypatch):
     return state
 
 
-def test_status_without_key(client, monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    assert client.get("/ai/status").json() == {"configured": False, "model": llm.DEFAULT_MODEL}
+def test_status_without_key(client):
+    default = llm.PROVIDERS[llm.DEFAULT_PROVIDER]
+    assert client.get("/ai/status").json() == {
+        "configured": False, "provider": llm.DEFAULT_PROVIDER, "model": default.default_model,
+    }
 
 
 def test_without_key_returns_503(client, demo_data, monkeypatch):
@@ -54,7 +56,7 @@ def test_without_key_returns_503(client, demo_data, monkeypatch):
         client.post("/ai/draft-job", json={"title": "Auxiliar contable"}),
     ):
         assert r.status_code == 503
-        assert "ANTHROPIC_API_KEY" in r.json()["detail"]
+        assert "AI_API_KEY" in r.json()["detail"]
 
 
 def test_evaluate_application(client, demo_data, claude):
@@ -66,7 +68,7 @@ def test_evaluate_application(client, demo_data, claude):
     assert len(body["interview_questions"]) == 3
 
     sent = claude["requests"][0]
-    assert sent["body"]["model"] == llm.DEFAULT_MODEL
+    assert sent["body"]["model"] == llm.PROVIDERS["anthropic"].default_model
     assert sent["body"]["fallbacks"] == "default"
     assert llm.FALLBACK_BETA in sent["headers"]["anthropic-beta"]
     assert sent["body"]["output_config"]["effort"] == "medium"

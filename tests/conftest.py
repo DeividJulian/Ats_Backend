@@ -4,6 +4,9 @@ import os
 os.environ["DATABASE_URL"] = "sqlite:///./test_ats.db"
 os.environ["ALLOW_DATA_RESET"] = "true"
 os.environ["JWT_SECRET"] = "test-secret-for-pytest-only-0123456789abcdef"
+# Tests never call a real AI provider: blank values win over a developer's .env (load_dotenv doesn't override)
+for _name in ("AI_PROVIDER", "AI_API_KEY", "AI_MODEL", "AI_BASE_URL", "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL"):
+    os.environ[_name] = ""
 
 import pytest
 from fastapi.testclient import TestClient

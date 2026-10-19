@@ -7,6 +7,7 @@ from services.ai import EducationLevel, Recommendation
 
 class AIStatus(BaseModel):
     configured: bool
+    provider: str
     model: str
 
 
