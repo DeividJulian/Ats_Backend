@@ -29,6 +29,7 @@ def provider(monkeypatch):
         state["provider"] = name
 
     monkeypatch.setenv("AI_API_KEY", "test-key")
+    monkeypatch.setattr(llm, "RETRY_DELAY_SECONDS", 0)
     use("gemini")
     monkeypatch.setattr(llm, "_http", httpx2.Client(transport=httpx2.MockTransport(handler)))
     state["use"] = use
@@ -101,6 +102,30 @@ def test_provider_errors_return_502(client, demo_data, provider, status, expecte
     r = client.post("/ai/evaluate/1")
     assert r.status_code == 502
     assert expected in r.json()["detail"]
+
+
+def test_busy_provider_is_retried_once(client, demo_data, provider, monkeypatch):
+    answers = [httpx2.Response(503, json={"error": {"message": "overloaded"}})]
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        if answers:
+            return answers.pop()
+        return httpx2.Response(200, json={"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(EVALUATION)}}]})
+
+    monkeypatch.setattr(llm, "_http", httpx2.Client(transport=httpx2.MockTransport(handler)))
+    assert client.post("/ai/evaluate/1").status_code == 200
+
+
+def test_usage_limit_and_bad_requests_are_not_retried(client, demo_data, provider):
+    for status in (429, 400):
+        provider["requests"].clear()
+        provider["reply"] = (status, {"error": {"message": "no"}})
+        client.post("/ai/evaluate/1")
+        assert len(provider["requests"]) == 1, status
+    provider["requests"].clear()
+    provider["reply"] = (503, {"error": {"message": "overloaded"}})
+    client.post("/ai/evaluate/1")
+    assert len(provider["requests"]) == 2
 
 
 def test_timeout_returns_502(client, demo_data, provider, monkeypatch):

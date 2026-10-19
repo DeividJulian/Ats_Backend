@@ -13,6 +13,7 @@ import copy
 import logging
 import os
 import re
+import time
 from dataclasses import dataclass
 from typing import Any, TypeVar
 
@@ -23,6 +24,8 @@ from pydantic import BaseModel, ValidationError
 logger = logging.getLogger("ats.ai")
 
 TIMEOUT_SECONDS = 30
+RETRYABLE_STATUS = {500, 502, 503, 504}
+RETRY_DELAY_SECONDS = 1.5
 # If a safety classifier declines a request, the API re-runs it on a recommended fallback model
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
@@ -205,12 +208,19 @@ def _generate_openai_compatible(config: AIConfig, system: str, user: str, output
             "json_schema": {"name": output_type.__name__.strip("_").lower(), "strict": True, "schema": strict_schema(output_type)},
         },
     }
-    try:
-        response = get_http().post(url, json=body, headers={"Authorization": f"Bearer {config.api_key}"})
-    except httpx2.TimeoutException as e:
-        raise LLMError(f"{_label(config)} tardó demasiado en responder. Intenta de nuevo.") from e
-    except httpx2.HTTPError as e:
-        raise LLMError(f"No se pudo contactar a {_label(config)}") from e
+    for attempt in range(2):
+        try:
+            response = get_http().post(url, json=body, headers={"Authorization": f"Bearer {config.api_key}"})
+        except httpx2.TimeoutException as e:
+            raise LLMError(f"{_label(config)} tardó demasiado en responder. Intenta de nuevo.") from e
+        except httpx2.HTTPError as e:
+            raise LLMError(f"No se pudo contactar a {_label(config)}") from e
+        # A busy provider (5xx) often answers on a second try; usage limits (429) are not retried
+        if response.status_code in RETRYABLE_STATUS and attempt == 0:
+            logger.info("El proveedor %s respondió %s: se reintenta una vez", config.provider, response.status_code)
+            time.sleep(RETRY_DELAY_SECONDS)
+            continue
+        break
     if response.status_code != 200:
         # The provider's message helps to diagnose (it never contains the API key)
         logger.warning("El proveedor %s respondió %s: %s", config.provider, response.status_code, response.text[:300])
