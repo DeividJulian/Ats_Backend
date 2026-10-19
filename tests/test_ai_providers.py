@@ -50,3 +50,185 @@ def test_evaluate_with_gemini(client, demo_data, provider):
     schema = sent["body"]["response_format"]["json_schema"]["schema"]
     assert schema["additionalProperties"] is False
     assert set(schema["required"]) == set(schema["properties"])
+
+
+# ---------- Errors (any OpenAI-compatible provider) ----------
+
+def test_invalid_json_returns_502(client, demo_data, provider):
+    provider["reply"] = "esto no es JSON"
+    r = client.post("/ai/evaluate/1")
+    assert r.status_code == 502 and "válida" in r.json()["detail"]
+
+
+def test_answer_outside_the_schema_returns_502(client, demo_data, provider):
+    provider["reply"] = {**EVALUATION, "recommendation": "contratar ya"}
+    assert client.post("/ai/evaluate/1").status_code == 502
+
+
+def test_json_inside_a_code_fence_is_accepted(client, demo_data, provider):
+    provider["reply"] = "```json\n" + json.dumps(EVALUATION) + "\n```"
+    assert client.post("/ai/evaluate/1").status_code == 200
+
+
+def test_content_filter_returns_502(client, demo_data, provider):
+    provider["finish_reason"] = "content_filter"
+    r = client.post("/ai/evaluate/1")
+    assert r.status_code == 502 and "declinó" in r.json()["detail"]
+
+
+def test_rate_limit_returns_429_in_spanish(client, demo_data, provider):
+    provider["reply"] = (429, {"error": {"code": 429, "message": "Resource has been exhausted", "status": "RESOURCE_EXHAUSTED"}})
+    r = client.post("/ai/evaluate/1")
+    assert r.status_code == 429
+    assert "límite de uso de Gemini" in r.json()["detail"]
+
+
+def test_rate_limit_keeps_retry_after(client, demo_data, provider, monkeypatch):
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(429, json={"error": {"message": "slow down"}}, headers={"Retry-After": "20"})
+
+    monkeypatch.setattr(llm, "_http", httpx2.Client(transport=httpx2.MockTransport(handler)))
+    r = client.post("/ai/evaluate/1")
+    assert r.status_code == 429 and r.headers["retry-after"] == "20"
+
+
+@pytest.mark.parametrize(
+    "status, expected",
+    [(500, "no está disponible"), (503, "no está disponible"), (401, "no es válida"), (404, "AI_MODEL"), (400, "rechazó")],
+)
+def test_provider_errors_return_502(client, demo_data, provider, status, expected):
+    provider["reply"] = (status, {"error": {"message": "boom"}})
+    r = client.post("/ai/evaluate/1")
+    assert r.status_code == 502
+    assert expected in r.json()["detail"]
+
+
+def test_timeout_returns_502(client, demo_data, provider, monkeypatch):
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        raise httpx2.ReadTimeout("too slow", request=request)
+
+    monkeypatch.setattr(llm, "_http", httpx2.Client(transport=httpx2.MockTransport(handler)))
+    r = client.post("/ai/evaluate/1")
+    assert r.status_code == 502 and "tardó demasiado" in r.json()["detail"]
+
+
+def test_without_key_returns_503(client, demo_data, provider, monkeypatch):
+    monkeypatch.setenv("AI_API_KEY", "")
+    r = client.post("/ai/draft-job", json={"title": "Auxiliar contable"})
+    assert r.status_code == 503 and "AI_API_KEY" in r.json()["detail"]
+    assert provider["requests"] == []
+
+
+def test_unknown_provider_is_not_configured(client, provider, monkeypatch):
+    monkeypatch.setenv("AI_PROVIDER", "openai")
+    assert client.get("/ai/status").json()["configured"] is False
+    r = client.post("/ai/draft-job", json={"title": "Auxiliar contable"})
+    assert r.status_code == 503 and "AI_PROVIDER" in r.json()["detail"]
+
+
+def test_legacy_anthropic_key_still_works(client, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "legacy-key")
+    assert client.get("/ai/status").json() == {"configured": True, "provider": "anthropic", "model": "claude-opus-5-5"}
+
+
+# ---------- Each provider: endpoint and headers ----------
+
+def test_gemini_endpoint_and_headers(client, demo_data, provider):
+    client.post("/ai/evaluate/1")
+    sent = provider["requests"][0]
+    assert sent["url"] == "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+    assert sent["headers"]["authorization"] == "Bearer test-key"
+    assert sent["body"]["model"] == "gemini-3.8-flash"
+
+
+def test_groq_endpoint_and_headers(client, provider):
+    provider["use"]("groq")
+    provider["reply"] = {
+        "description": "Apoyo contable.", "requirements": "Excel", "required_skills": ["Excel"],
+        "min_experience_years": 1, "min_education_level": None,
+    }
+    r = client.post("/ai/draft-job", json={"title": "Auxiliar contable"})
+    assert r.status_code == 200 and r.json()["required_skills"] == ["excel"]
+    sent = provider["requests"][0]
+    assert sent["url"] == "https://api.groq.com/openai/v1/chat/completions"
+    assert sent["headers"]["authorization"] == "Bearer test-key"
+    assert sent["body"]["model"] == "openai/gpt-oss-20b"
+    assert sent["body"]["response_format"]["json_schema"]["strict"] is True
+
+
+def test_model_and_base_url_can_be_overridden(client, provider, monkeypatch):
+    monkeypatch.setenv("AI_MODEL", "gemini-3.5-flash-lite")
+    monkeypatch.setenv("AI_BASE_URL", "https://proxy.example.com/v1/")
+    provider["reply"] = {"skills": ["Excel"], "experience_years": 3, "education_level": "technician", "summary": "Perfil."}
+    client.post("/ai/extract-resume", json={"text": "Técnico con 3 años de experiencia en Excel"})
+    sent = provider["requests"][0]
+    assert sent["url"] == "https://proxy.example.com/v1/chat/completions"
+    assert sent["body"]["model"] == "gemini-3.5-flash-lite"
+    assert client.get("/ai/status").json()["model"] == "gemini-3.5-flash-lite"
+
+
+def test_anthropic_endpoint_and_headers(client, demo_data, monkeypatch):
+    import anthropic
+
+    seen = {}
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen.update(url=str(request.url), headers=request.headers, body=json.loads(request.content))
+        return httpx2.Response(200, json={
+            "id": "msg_test", "type": "message", "role": "assistant", "model": "claude-opus-5-5",
+            "content": [{"type": "text", "text": json.dumps(EVALUATION)}],
+            "stop_reason": "end_turn", "stop_sequence": None, "usage": {"input_tokens": 1, "output_tokens": 1},
+        })
+
+    monkeypatch.setenv("AI_PROVIDER", "anthropic")
+    monkeypatch.setenv("AI_API_KEY", "anthropic-test-key")
+    monkeypatch.setattr(llm, "_client", anthropic.Anthropic(
+        api_key="anthropic-test-key", max_retries=0,
+        http_client=anthropic.DefaultHttpxClient(transport=httpx2.MockTransport(handler)),
+    ))
+    assert client.post("/ai/evaluate/1").status_code == 200
+    assert seen["url"].startswith("https://api.anthropic.com/v1/messages")
+    assert seen["headers"]["x-api-key"] == "anthropic-test-key"
+    assert "anthropic-version" in seen["headers"]
+    assert seen["body"]["model"] == "claude-opus-5-5"
+
+
+# ---------- Privacy ----------
+
+CONTACT_RESUME = (
+    "CAMILA ORTEGA\nCel +57 300 123 4567 | camila.ortega@example.com\n"
+    "Ingeniera de Sistemas con 3 años de experiencia (2021-2024) en Python, FastAPI, PostgreSQL, Git y Docker."
+)
+PRIVATE = ("camila", "ortega", "camila.ortega@example.com", "300 123 4567")
+
+
+def test_evaluation_never_sends_name_email_or_phone(client, demo_data, provider):
+    # Demo candidate 1 is Camila Ortega: her resume now starts with her contact data, as PDFs do
+    candidate = client.get("/candidates/1").json()
+    client.put("/candidates/1", json={
+        "name": candidate["name"], "email": candidate["email"], "phone": "+57 300 123 4567", "resume_text": CONTACT_RESUME,
+    })
+    assert client.post("/ai/evaluate/1").status_code == 200
+    sent = json.dumps(provider["requests"][0]["body"], ensure_ascii=False).lower()
+    for private in PRIVATE:
+        assert private not in sent, private
+    assert "[candidato]" in sent and "[correo]" in sent and "[teléfono]" in sent
+    assert "fastapi" in sent and "2021-2024" in sent
+
+
+def test_resume_extraction_never_sends_contact_data(client, provider):
+    provider["reply"] = {"skills": ["python"], "experience_years": 3, "education_level": "professional", "summary": "Perfil."}
+    assert client.post("/ai/extract-resume", json={"text": CONTACT_RESUME}).status_code == 200
+    sent = json.dumps(provider["requests"][0]["body"], ensure_ascii=False).lower()
+    for private in PRIVATE:
+        assert private not in sent, private
+
+
+def test_redaction_handles_accents_and_keeps_year_ranges():
+    from services.contact import extract_phone
+    from services.privacy import redact_personal_data
+
+    text = "Referencia de sebastian rojas. Trabajó de 2018-2023 en Bogotá. Correo SEBAS@MAIL.CO, tel 601 555 1234"
+    clean = redact_personal_data(text, names=("Sebastián Rojas",))
+    assert clean == "Referencia de [candidato] [candidato]. Trabajó de 2018-2023 en Bogotá. Correo [correo], tel [teléfono]"
+    assert extract_phone("Trabajé de 2018-2023. Cel 3001234567") == "3001234567"
