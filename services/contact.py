@@ -20,11 +20,19 @@ def extract_email(text: str | None) -> str | None:
     return match.group(0).lower() if match else None
 
 
+_YEAR_RANGE = re.compile(r"(?:19|20)\d{2}\s*[-–/]\s*(?:19|20)\d{2}")
+
+
+def looks_like_phone(candidate: str) -> bool:
+    """7 to 13 digits, and not a range of years such as 2019-2024."""
+    digits = re.sub(r"\D", "", candidate)
+    core = re.sub(r"^\D+|\D+$", "", candidate)
+    return 7 <= len(digits) <= 13 and not _YEAR_RANGE.fullmatch(core)
+
+
 def extract_phone(text: str | None) -> str | None:
     for match in _PHONE.finditer(text or ""):
-        digits = re.sub(r"\D", "", match.group(0))
-        # Skip years and short numbers; real phones have 7 to 13 digits
-        if 7 <= len(digits) <= 13:
+        if looks_like_phone(match.group(0)):
             return re.sub(r"\s+", " ", match.group(0).strip())
     return None
 

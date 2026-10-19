@@ -37,11 +37,14 @@ def evaluate_application(application_id: int, db: Session = Depends(get_db)):
     application = db.query(Application).filter(Application.id == application_id).first()
     if not application:
         raise HTTPException(status_code=404, detail="Postulación no encontrada")
+    candidate = application.candidate
     result = _run(
         ai.evaluate_candidate,
         job_to_dict(application.job),
-        candidate_to_dict(application.candidate),
+        candidate_to_dict(candidate),
         application.details or {},
+        # Only to remove these data from the resume text: they are never sent to the model
+        {"name": candidate.name, "email": candidate.email, "phone": candidate.phone},
     )
     return AIEvaluation(application_id=application.id, system_score=application.score, **result)
 

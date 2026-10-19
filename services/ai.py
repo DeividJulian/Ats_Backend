@@ -4,6 +4,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from services import llm
+from services.privacy import redact_personal_data, redact_resume
 from services.skills import canonicalize_skills
 
 EducationLevel = Literal[
@@ -52,8 +53,14 @@ def _clamp(value: int, low: int, high: int) -> int:
     return max(low, min(high, value))
 
 
-def evaluate_candidate(job: dict, candidate: dict, match: dict) -> dict:
-    """job/candidate come from services.matching (no name or email), match is the stored score breakdown."""
+def evaluate_candidate(job: dict, candidate: dict, match: dict, identity: dict | None = None) -> dict:
+    """job/candidate come from services.matching (no name or email), match is the stored score breakdown.
+    identity (name, email, phone) is only used to remove those data from the resume text before sending it."""
+    identity = identity or {}
+    resume = redact_personal_data(
+        candidate["resume_text"],
+        names=(identity.get("name"),), emails=(identity.get("email"),), phones=(identity.get("phone"),),
+    )
     system = (
         "You are a recruiting analyst for a small business. You assess how well a candidate fits a job. "
         "You also get a score computed by the system: use it as a reference and do not change it. "
@@ -63,7 +70,7 @@ def evaluate_candidate(job: dict, candidate: dict, match: dict) -> dict:
         f"<job>\nTitle: {job['title']}\nDescription: {job['description']}\nRequirements: {job['requirements']}\n"
         f"Required skills: {', '.join(job['required_skills']) or 'none'}\n"
         f"Minimum experience: {job['min_experience_years']} years\n</job>\n"
-        f"<resume>\n{candidate['resume_text']}\n</resume>\n"
+        f"<resume>\n{resume}\n</resume>\n"
         f"System score: {match.get('score')} out of 100 ({match.get('classification')}). "
         f"Matching skills: {', '.join(match.get('matching_skills', [])) or 'none'}. "
         f"Inferred skills: {', '.join(match.get('inferred_skills', {})) or 'none'}. "
@@ -81,7 +88,7 @@ def evaluate_candidate(job: dict, candidate: dict, match: dict) -> dict:
 
 def extract_resume_profile(text: str) -> dict:
     system = "You extract structured data from a resume. If a value is not present, use null, 0 or an empty list. " + COMMON_RULES
-    result = llm.generate(system, f"<resume>\n{text}\n</resume>", _ResumeProfile, effort="low")
+    result = llm.generate(system, f"<resume>\n{redact_resume(text)}\n</resume>", _ResumeProfile, effort="low")
     return {
         "skills": canonicalize_skills(_clean_list(result.skills, 40)),
         "experience_years": _clamp(result.experience_years, 0, 45),
