@@ -7,6 +7,7 @@ from models.application import Application
 from models.candidate import Candidate
 from schemas.candidate import CandidateCreate, CandidateOut
 from services.auth import staff_only
+from services.identity import reject_if_not_theirs
 from services.profile import extract_education_level, extract_experience_years
 from services.skills import canonicalize_skills, extract_skills, sort_skills
 
@@ -73,6 +74,8 @@ def update_candidate(candidate_id: int, data: CandidateCreate, db: Session = Dep
     candidate = get_candidate_or_404(db, candidate_id)
     if email_in_use(db, data.email, exclude_id=candidate_id):
         raise HTTPException(status_code=409, detail="Ya existe otro candidato con ese correo")
+    if data.resume_text.strip() and data.resume_text != candidate.resume_text:
+        reject_if_not_theirs(data.name, data.email, data.resume_text)
     fill_profile(candidate, data)
     db.commit()
     db.refresh(candidate)

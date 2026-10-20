@@ -13,6 +13,7 @@ from schemas.candidate import CandidateOut
 from schemas.insights import CandidateInsights
 from schemas.portal import ApplyInput, MyApplication, ProfileUpdate
 from services.auth import candidate_only
+from services.identity import reject_if_not_theirs
 from services.insights import candidate_insights
 from services.matching import recommend_jobs
 from services.profile import extract_education_level, extract_experience_years
@@ -47,6 +48,8 @@ def get_profile(user: User = Depends(candidate_only), db: Session = Depends(get_
 def update_profile(data: ProfileUpdate, user: User = Depends(candidate_only), db: Session = Depends(get_db)):
     """Lo que no se indique (experiencia, nivel educativo) se deduce del texto de la hoja de vida."""
     candidate = my_profile(user, db)
+    if data.resume_text.strip() and data.resume_text != candidate.resume_text:
+        reject_if_not_theirs(data.name, user.email, data.resume_text, own=True)
     candidate.name = user.name = data.name
     candidate.phone = data.phone
     candidate.resume_text = data.resume_text
@@ -65,7 +68,9 @@ async def upload_my_resume(
     file: UploadFile = File(...), user: User = Depends(candidate_only), db: Session = Depends(get_db)
 ):
     candidate = my_profile(user, db)
-    apply_resume_text(candidate, await read_pdf_or_422(file))
+    text = await read_pdf_or_422(file)
+    reject_if_not_theirs(user.name, user.email, text, own=True)
+    apply_resume_text(candidate, text)
     db.commit()
     db.refresh(candidate)
     return candidate

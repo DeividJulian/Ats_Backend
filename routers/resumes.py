@@ -7,6 +7,7 @@ from models.candidate import Candidate
 from schemas.candidate import CandidateOut
 from schemas.nlp import ResumeAnalysis
 from services.auth import staff_only
+from services.identity import reject_if_not_theirs
 from services.resume import InvalidResumeError, analyze_resume_text, apply_resume_text, extract_pdf_text
 
 router = APIRouter(tags=["Hojas de vida"], dependencies=[Depends(staff_only)])
@@ -61,7 +62,9 @@ async def upload_resume(candidate_id: int, file: UploadFile = File(...), db: Ses
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidato no encontrado")
 
-    apply_resume_text(candidate, await read_pdf_or_422(file))
+    text = await read_pdf_or_422(file)
+    reject_if_not_theirs(candidate.name, candidate.email, text)
+    apply_resume_text(candidate, text)
     db.commit()
     db.refresh(candidate)
     return candidate
