@@ -15,6 +15,7 @@ import models  # noqa: F401  (registers every table)
 import routers
 from database import Base, SessionLocal, engine
 from errors import http_message, validation_message
+from migrate_auth import upgrade_auth_schema
 from services.bootstrap import ensure_admin
 
 logging.basicConfig(
@@ -25,6 +26,8 @@ logging.basicConfig(
 logger = logging.getLogger("ats.api")
 
 Base.metadata.create_all(bind=engine)
+# Existing databases (Neon) get the columns of the email-code login without losing data
+upgrade_auth_schema(engine)
 
 with SessionLocal() as db:
     ensure_admin(db)
