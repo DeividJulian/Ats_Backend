@@ -5,11 +5,14 @@ Environment variables:
   AI_API_KEY   API key of that provider (required to use the AI features)
   AI_MODEL     optional model override (each provider has a default)
   AI_BASE_URL  optional endpoint override (each provider has a default)
+  AI_FALLBACK_MODEL  lighter model used when the main one is busy, out of quota or too slow
+               (Gemini: gemini-flash-lite-latest by default; "none" turns it off)
 
 Compatibility: with ANTHROPIC_API_KEY set and no AI_API_KEY, Anthropic is used as before
 (ANTHROPIC_MODEL still works as the model override).
 """
 import copy
+import dataclasses
 import logging
 import os
 import re
@@ -24,6 +27,8 @@ from pydantic import BaseModel, ValidationError
 logger = logging.getLogger("ats.ai")
 
 TIMEOUT_SECONDS = 30
+# With a fallback model, the main one gets less time: when it is busy it is often just slow
+PRIMARY_TIMEOUT_SECONDS = 15
 RETRYABLE_STATUS = {500, 502, 503, 504}
 RETRY_DELAY_SECONDS = 1.5
 # If a safety classifier declines a request, the API re-runs it on a recommended fallback model
@@ -35,11 +40,17 @@ class Provider:
     label: str
     default_model: str
     default_base_url: str | None
+    # Lighter model to try when the main one is overloaded (503), out of free quota (429) or too slow
+    default_fallback: str | None = None
 
 
 # Gemini and Groq are called through their OpenAI-compatible endpoints (POST {base_url}/chat/completions)
 PROVIDERS = {
-    "gemini": Provider("Gemini (Google)", "gemini-3.8-flash", "https://generativelanguage.googleapis.com/v1beta/openai/"),
+    # gemini-flash-lite-latest is an alias Google keeps pointing to its current lite model, with a larger free quota
+    "gemini": Provider(
+        "Gemini (Google)", "gemini-3.8-flash", "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "gemini-flash-lite-latest",
+    ),
     "groq": Provider("Groq", "openai/gpt-oss-20b", "https://api.groq.com/openai/v1"),
     "anthropic": Provider("Claude (Anthropic)", "claude-opus-5-5", None),
 }
@@ -57,6 +68,10 @@ class LLMNotConfigured(Exception):
 
 class LLMError(Exception):
     """The API failed or returned an unusable answer. The message is shown to the user, so it is in Spanish."""
+
+
+class LLMUnavailable(LLMError):
+    """The provider is overloaded (5xx) or did not answer in time: another model may still work."""
 
 
 class LLMRateLimited(LLMError):
@@ -84,7 +99,7 @@ def _status_error(config: "AIConfig", status: int, retry_after: str | None = Non
     if status == 404:
         return LLMError(f"{name} no reconoce el modelo configurado (revisa AI_MODEL)")
     if status >= 500:
-        return LLMError(f"El servicio de {name} no está disponible en este momento ({status}). Intenta más tarde.")
+        return LLMUnavailable(f"El servicio de {name} no está disponible en este momento ({status}). Intenta más tarde.")
     return LLMError(f"{name} rechazó la solicitud ({status})")
 
 
@@ -94,6 +109,7 @@ class AIConfig:
     api_key: str
     model: str
     base_url: str | None
+    fallback_model: str | None = None
 
 
 def current_config() -> AIConfig:
@@ -108,7 +124,10 @@ def current_config() -> AIConfig:
     spec = PROVIDERS.get(provider)
     model = os.getenv("AI_MODEL") or (spec.default_model if spec else "")
     base_url = os.getenv("AI_BASE_URL") or (spec.default_base_url if spec else None)
-    return AIConfig(provider, api_key, model, base_url)
+    fallback = (os.getenv("AI_FALLBACK_MODEL") or (spec.default_fallback if spec else "") or "").strip()
+    if fallback.lower() in ("", "none", "no", "false") or fallback == model:
+        fallback = None
+    return AIConfig(provider, api_key, model, base_url, fallback)
 
 
 def provider_name() -> str:
@@ -198,7 +217,9 @@ def _without_code_fence(text: str) -> str:
     return re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.IGNORECASE)
 
 
-def _generate_openai_compatible(config: AIConfig, system: str, user: str, output_type: type[T]) -> T:
+def _generate_openai_compatible(
+    config: AIConfig, system: str, user: str, output_type: type[T], retry: bool = True, timeout: float | None = None
+) -> T:
     url = config.base_url.rstrip("/") + "/chat/completions"
     body = {
         "model": config.model,
@@ -208,15 +229,17 @@ def _generate_openai_compatible(config: AIConfig, system: str, user: str, output
             "json_schema": {"name": output_type.__name__.strip("_").lower(), "strict": True, "schema": strict_schema(output_type)},
         },
     }
-    for attempt in range(2):
+    for attempt in range(2 if retry else 1):
         try:
-            response = get_http().post(url, json=body, headers={"Authorization": f"Bearer {config.api_key}"})
+            response = get_http().post(
+                url, json=body, headers={"Authorization": f"Bearer {config.api_key}"}, timeout=timeout or TIMEOUT_SECONDS
+            )
         except httpx2.TimeoutException as e:
-            raise LLMError(f"{_label(config)} tardó demasiado en responder. Intenta de nuevo.") from e
+            raise LLMUnavailable(f"{_label(config)} tardó demasiado en responder. Intenta de nuevo.") from e
         except httpx2.HTTPError as e:
             raise LLMError(f"No se pudo contactar a {_label(config)}") from e
         # A busy provider (5xx) often answers on a second try; usage limits (429) are not retried
-        if response.status_code in RETRYABLE_STATUS and attempt == 0:
+        if response.status_code in RETRYABLE_STATUS and retry and attempt == 0:
             logger.info("El proveedor %s respondió %s: se reintenta una vez", config.provider, response.status_code)
             time.sleep(RETRY_DELAY_SECONDS)
             continue
@@ -249,4 +272,11 @@ def generate(system: str, user: str, output_type: type[T], effort: str = "medium
     _check(config)
     if config.provider == "anthropic":
         return _generate_anthropic(config, system, user, output_type, effort)
-    return _generate_openai_compatible(config, system, user, output_type)
+    if not config.fallback_model:
+        return _generate_openai_compatible(config, system, user, output_type)
+    # One try with the main model; if it is busy, out of quota or slow, the lighter model answers instead
+    try:
+        return _generate_openai_compatible(config, system, user, output_type, retry=False, timeout=PRIMARY_TIMEOUT_SECONDS)
+    except (LLMUnavailable, LLMRateLimited) as e:
+        logger.info("%s falló (%s): se usa el modelo de respaldo %s", config.model, e, config.fallback_model)
+    return _generate_openai_compatible(dataclasses.replace(config, model=config.fallback_model), system, user, output_type)

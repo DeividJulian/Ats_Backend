@@ -116,7 +116,12 @@ def test_busy_provider_is_retried_once(client, demo_data, provider, monkeypatch)
     assert client.post("/ai/evaluate/1").status_code == 200
 
 
-def test_usage_limit_and_bad_requests_are_not_retried(client, demo_data, provider):
+def models_called(provider):
+    return [r["body"]["model"] for r in provider["requests"]]
+
+
+def test_without_fallback_usage_limit_and_bad_requests_are_not_retried(client, demo_data, provider, monkeypatch):
+    monkeypatch.setenv("AI_FALLBACK_MODEL", "none")
     for status in (429, 400):
         provider["requests"].clear()
         provider["reply"] = (status, {"error": {"message": "no"}})
@@ -125,7 +130,69 @@ def test_usage_limit_and_bad_requests_are_not_retried(client, demo_data, provide
     provider["requests"].clear()
     provider["reply"] = (503, {"error": {"message": "overloaded"}})
     client.post("/ai/evaluate/1")
-    assert len(provider["requests"]) == 2
+    assert models_called(provider) == ["gemini-3.8-flash", "gemini-3.8-flash"]
+
+
+@pytest.mark.parametrize("status", [503, 429])
+def test_busy_or_out_of_quota_gemini_answers_with_the_lighter_model(client, demo_data, monkeypatch, provider, status):
+    calls = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        model = json.loads(request.content)["model"]
+        calls.append(model)
+        if model == "gemini-3.8-flash":
+            return httpx2.Response(status, json={"error": {"message": "high demand"}})
+        return httpx2.Response(200, json={"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(EVALUATION)}}]})
+
+    monkeypatch.setattr(llm, "_http", httpx2.Client(transport=httpx2.MockTransport(handler)))
+    r = client.post("/ai/evaluate/1")
+    assert r.status_code == 200 and r.json()["recommendation"] == "advance"
+    # One try with the main model, then straight to the fallback (no time lost retrying a busy model)
+    assert calls == ["gemini-3.8-flash", "gemini-flash-lite-latest"]
+
+
+def test_slow_main_model_falls_back_too(client, demo_data, monkeypatch, provider):
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        if json.loads(request.content)["model"] == "gemini-3.8-flash":
+            raise httpx2.ReadTimeout("too slow", request=request)
+        return httpx2.Response(200, json={"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(EVALUATION)}}]})
+
+    monkeypatch.setattr(llm, "_http", httpx2.Client(transport=httpx2.MockTransport(handler)))
+    assert client.post("/ai/evaluate/1").status_code == 200
+
+
+def test_if_both_models_fail_the_error_is_clear(client, demo_data, provider):
+    provider["reply"] = (503, {"error": {"message": "overloaded"}})
+    r = client.post("/ai/evaluate/1")
+    assert r.status_code == 502 and "no está disponible" in r.json()["detail"]
+    # Main once, fallback twice (it keeps its single retry)
+    assert models_called(provider) == ["gemini-3.8-flash", "gemini-flash-lite-latest", "gemini-flash-lite-latest"]
+
+
+@pytest.mark.parametrize("status", [400, 401, 404])
+def test_configuration_errors_do_not_use_the_fallback(client, demo_data, provider, status):
+    provider["reply"] = (status, {"error": {"message": "no"}})
+    assert client.post("/ai/evaluate/1").status_code == 502
+    assert models_called(provider) == ["gemini-3.8-flash"]
+
+
+def test_fallback_model_can_be_chosen_or_turned_off(monkeypatch):
+    monkeypatch.setenv("AI_API_KEY", "k")
+    monkeypatch.setenv("AI_PROVIDER", "gemini")
+    monkeypatch.delenv("AI_MODEL", raising=False)
+    monkeypatch.delenv("AI_FALLBACK_MODEL", raising=False)
+    assert llm.current_config().fallback_model == "gemini-flash-lite-latest"
+    monkeypatch.setenv("AI_FALLBACK_MODEL", "gemini-3.5-flash-lite")
+    assert llm.current_config().fallback_model == "gemini-3.5-flash-lite"
+    monkeypatch.setenv("AI_FALLBACK_MODEL", "none")
+    assert llm.current_config().fallback_model is None
+    # Groq has no fallback by default, and the same model never counts as its own fallback
+    monkeypatch.delenv("AI_FALLBACK_MODEL")
+    monkeypatch.setenv("AI_PROVIDER", "groq")
+    assert llm.current_config().fallback_model is None
+    monkeypatch.setenv("AI_PROVIDER", "gemini")
+    monkeypatch.setenv("AI_MODEL", "gemini-flash-lite-latest")
+    assert llm.current_config().fallback_model is None
 
 
 def test_timeout_returns_502(client, demo_data, provider, monkeypatch):

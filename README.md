@@ -76,6 +76,7 @@ Crea un archivo `.env` copiando `.env.example`:
 | `AI_PROVIDER` | Proveedor de IA: `gemini` (por defecto), `groq` o `anthropic` |
 | `AI_API_KEY` | Clave de ese proveedor. Opcional: sin ella los endpoints `/ai` responden 503 y todo lo demás funciona |
 | `AI_MODEL` | Opcional. Modelo a usar (por defecto `gemini-3.8-flash`, `openai/gpt-oss-20b` en Groq o `claude-opus-5-5` en Anthropic) |
+| `AI_FALLBACK_MODEL` | Opcional. Modelo más liviano que responde cuando el principal está saturado (503), sin cuota gratis (429) o tarda más de 15 segundos. En Gemini es `gemini-flash-lite-latest` por defecto; `none` lo desactiva |
 | `AI_BASE_URL` | Opcional. Otra dirección para el endpoint (por defecto la oficial de cada proveedor) |
 
 ```
