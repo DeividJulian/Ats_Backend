@@ -26,17 +26,9 @@ class VerifyInput(BaseModel):
     code: Code
 
 
-class DemoLoginInput(BaseModel):
-    account: Literal["recruiter", "candidate"]
-
-
 class CodeSent(BaseModel):
     message: str
     email: str
-
-
-class AuthOptions(BaseModel):
-    demo_login: bool
 
 
 class UserOut(BaseModel):

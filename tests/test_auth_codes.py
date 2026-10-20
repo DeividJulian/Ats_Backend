@@ -256,19 +256,3 @@ def test_unknown_email_backend_fails_clearly(monkeypatch):
     monkeypatch.setattr(config, "EMAIL_BACKEND", "paloma")
     with pytest.raises(MailError, match="EMAIL_BACKEND desconocido"):
         mailer.send_email("juan@mail.com", "Asunto", "Texto")
-
-
-def test_demo_accounts_enter_without_a_code_only_when_allowed(anon, demo_data, monkeypatch):
-    assert anon.get("/auth/options").json() == {"demo_login": True}
-    r = anon.post("/auth/demo", json={"account": "recruiter"})
-    assert r.status_code == 200 and r.json()["user"]["role"] == "recruiter"
-    assert anon.post("/auth/demo", json={"account": "candidate"}).json()["user"]["candidate_id"]
-    assert anon.post("/auth/demo", json={"account": "admin"}).status_code == 422
-
-    monkeypatch.setattr(config, "ALLOW_DEMO_LOGIN", False)
-    assert anon.get("/auth/options").json() == {"demo_login": False}
-    assert anon.post("/auth/demo", json={"account": "recruiter"}).status_code == 403
-
-
-def test_demo_login_needs_the_demo_data(anon):
-    assert anon.post("/auth/demo", json={"account": "recruiter"}).status_code == 404

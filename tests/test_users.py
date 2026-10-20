@@ -1,4 +1,4 @@
-from tests.conftest import last_code, login
+from tests.conftest import last_code, login, register
 
 RECRUITER = {"name": "Laura Gómez", "email": "laura@empresa.com", "role": "recruiter"}
 
@@ -50,6 +50,7 @@ def test_admin_cannot_lock_themselves_out(client, admin_id):
 
 
 def test_deleting_a_candidate_account_keeps_the_profile(client, demo_data):
+    register("Camila Ortega", "camila.ortega@example.com")
     candidate_user = next(u for u in client.get("/users").json() if u["role"] == "candidate")
     assert client.patch(f"/users/{candidate_user['id']}", json={"role": "admin"}).status_code == 409
     assert client.delete(f"/users/{candidate_user['id']}").status_code == 200

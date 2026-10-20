@@ -72,7 +72,6 @@ Crea un archivo `.env` copiando `.env.example`:
 | `EMAIL_FROM` / `EMAIL_FROM_NAME` | Remitente de los correos. Con Brevo debe ser un remitente verificado en tu cuenta |
 | `BREVO_API_KEY` | Clave de la API de Brevo (Settings → SMTP & API → API Keys) |
 | `CODIGO_MINUTOS` / `CODIGO_INTENTOS` / `CODIGO_ESPERA_SEGUNDOS` | Vigencia del código (10), intentos permitidos (5) y espera entre envíos (30) |
-| `ALLOW_DEMO_LOGIN` | `true` deja entrar sin código a las dos cuentas de demostración (sus correos son falsos). Solo para mostrar el proyecto |
 | `ADMIN_EMAIL` | Primer administrador: se crea al arrancar si no existe y entra con el código que le llega a ese correo (debe ser real) |
 | `AI_PROVIDER` | Proveedor de IA: `gemini` (por defecto), `groq` o `anthropic` |
 | `AI_API_KEY` | Clave de ese proveedor. Opcional: sin ella los endpoints `/ai` responden 503 y todo lo demás funciona |
@@ -118,7 +117,7 @@ Si ya tenías una base en Neon de la versión con contraseña, al arrancar se ag
 
 Los candidatos se registran solos. Las cuentas de reclutador y administrador las crea un administrador desde `POST /users` (sin contraseña: la persona entra con el código que le llega). El primer administrador sale de `ADMIN_EMAIL`. Cada candidato ve y modifica solo su perfil y sus postulaciones; las vacantes y los candidatos los comparte todo el equipo de selección.
 
-`POST /seed` crea dos cuentas de prueba: `reclutador@demo.com` (reclutador) y `camila.ortega@example.com` (candidata). Como sus correos son falsos, entran con `POST /auth/demo` solo si `ALLOW_DEMO_LOGIN=true`.
+`POST /seed` carga vacantes, candidatos y postulaciones de ejemplo, pero no crea cuentas: todas entran con un código enviado a un correo real.
 
 ## Cómo funciona la IA
 
@@ -177,7 +176,7 @@ Solo cambian las variables, no el código:
 | IA con modelo de lenguaje | `GET /ai/status`, `POST /ai/evaluate/{application_id}`, `POST /ai/extract-resume`, `POST /ai/draft-job` |
 | NLP | `POST /nlp/analyze-text`, `POST /nlp/similarity` |
 | Análisis | `GET /stats` |
-| Autenticación | `POST /auth/register` (candidatos), `POST /auth/login`, `POST /auth/verify`, `GET /auth/me`, `GET /auth/options`, `POST /auth/demo` |
+| Autenticación | `POST /auth/register` (candidatos), `POST /auth/login`, `POST /auth/verify`, `GET /auth/me` |
 | Usuarios (admin) | `GET /users`, `POST /users`, `PATCH /users/{id}`, `DELETE /users/{id}` |
 | Portal del candidato | `GET/PUT /me/profile`, `POST /me/resume`, `GET /me/insights`, `GET /me/recommended-jobs`, `GET/POST /me/applications`, `DELETE /me/applications/{id}` |
 | Público (sin sesión) | `GET /public/jobs`, `GET /public/jobs/{id}`, `GET /public/summary` |

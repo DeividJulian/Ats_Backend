@@ -1,4 +1,4 @@
-"""Demo data: 3 jobs, 9 fictional candidates, 10 applications in different statuses and 2 demo accounts."""
+"""Demo data: 3 jobs, 9 fictional candidates and 10 applications in different statuses. It creates no accounts."""
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -67,12 +67,6 @@ APPLICATIONS = [
 ]
 
 
-# Accounts to try the app. Their emails are fake, so no code can reach them: they enter through
-# POST /auth/demo, only when ALLOW_DEMO_LOGIN=true. Admins are never created here: they come from ADMIN_EMAIL
-DEMO_RECRUITER = ("Reclutador Demo", "reclutador@demo.com")
-# The first demo candidate (Camila Ortega) also gets an account to try the candidate portal
-DEMO_CANDIDATE_INDEX = 0
-DEMO_CANDIDATE_EMAIL = CANDIDATES[DEMO_CANDIDATE_INDEX][1]
 
 
 def has_data(db: Session) -> bool:
@@ -126,19 +120,10 @@ def load_demo_data(db: Session) -> dict:
             )
         )
 
-    demo_candidate = candidates[DEMO_CANDIDATE_INDEX]
-    accounts = [
-        User(name=DEMO_RECRUITER[0], email=DEMO_RECRUITER[1], role="recruiter", verified=True),
-        User(name=demo_candidate.name, email=demo_candidate.email, role="candidate", candidate_id=demo_candidate.id,
-             verified=True),
-    ]
-    # An account with the same email may already exist (for example an admin): it is left untouched
-    existing = {email for (email,) in db.query(User.email).all()}
-    db.add_all(a for a in accounts if a.email not in existing)
+    # No accounts: everybody enters with a code sent to a real email
     db.commit()
     return {
         "jobs": len(jobs),
         "candidates": len(candidates),
         "applications": len(APPLICATIONS),
-        "demo_accounts": [{"email": a.email, "role": a.role} for a in accounts],
     }

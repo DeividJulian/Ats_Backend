@@ -6,7 +6,7 @@ from tests.conftest import login, make_pdf, register
 @pytest.fixture
 def camila(demo_data):
     """Demo candidate: Camila Ortega (candidate 1), already applied to job 1."""
-    return login("camila.ortega@example.com")
+    return register("Camila Ortega", "camila.ortega@example.com")
 
 
 @pytest.fixture

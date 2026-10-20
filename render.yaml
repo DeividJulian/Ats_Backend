@@ -43,9 +43,6 @@ services:
         value: "5"
       - key: CODIGO_ESPERA_SEGUNDOS
         value: "30"
-      # The demo accounts have fake emails: true lets them in without a code (only to show the project)
-      - key: ALLOW_DEMO_LOGIN
-        value: "false"
       # First administrator, created on startup if it doesn't exist; enters with the code sent to that email
       - key: ADMIN_EMAIL
         sync: false

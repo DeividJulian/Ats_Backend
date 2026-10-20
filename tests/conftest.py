@@ -7,7 +7,6 @@ os.environ["SECRET_KEY"] = "test-secret-for-pytest-only-0123456789abcdef"
 # Emails stay in memory (services.mailer.OUTBOX); no wait between codes unless a test asks for it
 os.environ["EMAIL_BACKEND"] = "memoria"
 os.environ["CODIGO_ESPERA_SEGUNDOS"] = "0"
-os.environ["ALLOW_DEMO_LOGIN"] = "true"
 # Tests never call a real AI provider: blank values win over a developer's .env (load_dotenv doesn't override)
 for _name in ("AI_PROVIDER", "AI_API_KEY", "AI_MODEL", "AI_BASE_URL", "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL"):
     os.environ[_name] = ""

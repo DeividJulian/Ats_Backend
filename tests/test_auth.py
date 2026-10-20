@@ -2,7 +2,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from main import app
-from services.seed import DEMO_RECRUITER
 from tests.conftest import ADMIN, last_code, login, register
 
 
@@ -75,8 +74,9 @@ def test_closed_jobs_are_not_public(client, anon, demo_data):
     assert anon.get("/public/jobs/1").status_code == 404
 
 
-def test_recruiter_permissions(demo_data):
-    recruiter = login(DEMO_RECRUITER[1])
+def test_recruiter_permissions(client, demo_data):
+    client.post("/users", json={"name": "Laura Gómez", "email": "laura@empresa.com", "role": "recruiter"})
+    recruiter = login("laura@empresa.com")
     assert recruiter.get("/jobs").status_code == 200
     assert recruiter.get("/jobs/1/ranking").status_code == 200
     assert recruiter.get("/users").status_code == 403
@@ -85,7 +85,7 @@ def test_recruiter_permissions(demo_data):
 
 
 def test_candidate_permissions(demo_data):
-    candidate = login("camila.ortega@example.com")
+    candidate = register("Camila Ortega", "camila.ortega@example.com")
     for path in ("/jobs", "/candidates", "/applications", "/stats", "/jobs/1/ranking", "/users"):
         r = candidate.get(path)
         assert r.status_code == 403, path
@@ -93,9 +93,14 @@ def test_candidate_permissions(demo_data):
     assert candidate.get("/me/profile").status_code == 200
 
 
-def test_seed_creates_demo_accounts(demo_data):
-    assert {a["role"] for a in demo_data["demo_accounts"]} == {"recruiter", "candidate"}
-    login(DEMO_RECRUITER[1])
+def test_seed_creates_no_accounts(client, demo_data):
+    assert "demo_accounts" not in demo_data
+    assert [u["email"] for u in client.get("/users").json()] == [ADMIN["email"]]
+
+
+def test_there_is_no_demo_login(anon, demo_data):
+    assert anon.post("/auth/demo", json={"account": "recruiter"}).status_code == 404
+    assert anon.get("/auth/options").status_code == 404
 
 
 def test_reset_keeps_admins_but_removes_other_accounts(client, demo_data, anon):

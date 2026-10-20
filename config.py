@@ -31,7 +31,3 @@ SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
-
-# Lets anyone enter the two seeded demo accounts without a code (their emails are fake).
-# Only for showing the project: keep it false when there is real data.
-ALLOW_DEMO_LOGIN = os.getenv("ALLOW_DEMO_LOGIN", "false").strip().lower() == "true"
