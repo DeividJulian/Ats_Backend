@@ -8,6 +8,7 @@
 import json
 import logging
 import smtplib
+import urllib.error
 import urllib.request
 from email.message import EmailMessage
 
@@ -76,6 +77,11 @@ def _send_brevo(to: str, subject: str, text: str, html: str | None) -> None:
         headers={"api-key": config.BREVO_API_KEY, "Content-Type": "application/json", "Accept": "application/json"},
         method="POST",
     )
-    # urlopen raises HTTPError when Brevo answers 4xx/5xx
-    with urllib.request.urlopen(request, timeout=15):
-        pass
+    try:
+        with urllib.request.urlopen(request, timeout=15):
+            pass
+    except urllib.error.HTTPError as e:
+        # Brevo explains the reason in the body (unrecognised IP, invalid key, unverified sender...); it never has the key
+        detail = e.read().decode("utf-8", "replace")[:300]
+        logger.error("Brevo rechazó el correo (%s): %s", e.code, detail)
+        raise MailError(f"Brevo respondió {e.code}: {detail}") from e

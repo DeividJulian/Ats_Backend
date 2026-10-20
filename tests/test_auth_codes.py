@@ -252,6 +252,21 @@ def test_brevo_errors_become_mail_errors(monkeypatch):
         mailer.send_email("juan@mail.com", "Asunto", "Texto")
 
 
+def test_brevo_rejection_reason_is_kept(monkeypatch):
+    import io
+    import urllib.error
+
+    def blocked(request, timeout):
+        body = io.BytesIO(b'{"code":"unauthorized","message":"We have detected you are using an unrecognised IP address"}')
+        raise urllib.error.HTTPError(request.full_url, 401, "Unauthorized", {}, body)
+
+    monkeypatch.setattr(config, "EMAIL_BACKEND", "brevo")
+    monkeypatch.setattr(config, "BREVO_API_KEY", "clave")
+    monkeypatch.setattr(mailer.urllib.request, "urlopen", blocked)
+    with pytest.raises(MailError, match="401.*unrecognised IP"):
+        mailer.send_email("juan@mail.com", "Asunto", "Texto")
+
+
 def test_unknown_email_backend_fails_clearly(monkeypatch):
     monkeypatch.setattr(config, "EMAIL_BACKEND", "paloma")
     with pytest.raises(MailError, match="EMAIL_BACKEND desconocido"):
