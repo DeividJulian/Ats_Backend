@@ -1,6 +1,6 @@
 # Portal ATS para pymes — Backend
 
-API que permite publicar vacantes, registrar candidatos y **ordenarlos automáticamente según su ajuste al cargo** usando procesamiento de lenguaje natural (NLP) implementado desde cero. Opcionalmente, un modelo de lenguaje (Gemini por defecto, gratis; también Groq o Claude) redacta evaluaciones, extrae perfiles y propone vacantes.
+API que permite publicar vacantes, registrar candidatos y **ordenarlos automáticamente según su ajuste al cargo** usando procesamiento de lenguaje natural (NLP) implementado desde cero. Opcionalmente, un modelo de lenguaje (Groq por defecto, gratis; también Gemini o Claude) redacta evaluaciones, extrae perfiles y propone vacantes.
 
 - **Frontend:** https://github.com/DeividJulian/Ats_Front (Angular) · https://ats-front-six.vercel.app
 - **API desplegada:** https://ats-backend-xtp7.onrender.com
@@ -26,7 +26,9 @@ El código y la API (rutas y campos JSON) están en inglés. Los mensajes de err
 ├── database.py          # Conexión y sesión de base de datos
 ├── errors.py            # Mensajes de error en español
 ├── render.yaml          # Configuración de despliegue en Render
-├── models/              # Tablas: users, jobs, candidates, applications
+├── config.py            # Variables de entorno: sesión, códigos y envío de correo
+├── migrate_auth.py      # Agrega a una base existente lo del login por código, sin borrar datos
+├── models/              # Tablas: users, verification_codes, jobs, candidates, applications
 ├── schemas/             # Validación de entrada y salida
 ├── routers/             # Endpoints agrupados por recurso
 ├── services/
@@ -42,13 +44,15 @@ El código y la API (rutas y campos JSON) están en inglés. Los mensajes de err
 │   ├── ai.py            # Evaluación, extracción de perfil y redacción de vacantes con IA
 │   ├── privacy.py       # Oculta nombre, correo y teléfono antes de enviar texto a la IA
 │   ├── resume.py        # Lectura y análisis de hojas de vida en PDF
-│   ├── security.py      # Contraseñas (scrypt) y tokens de sesión (JWT)
+│   ├── security.py      # Tokens de sesión (JWT)
+│   ├── codes.py         # Códigos de un solo uso para entrar sin contraseña
+│   ├── mailer.py        # Envío de correos: consola, memoria, SMTP o Brevo
 │   ├── auth.py          # Usuario de la petición y permisos por rol
 │   ├── bootstrap.py     # Crea el primer administrador desde variables de entorno
 │   ├── pipeline.py      # Flujo de estados de la postulación
 │   ├── stats.py         # Embudo y brechas de talento
 │   └── seed.py          # Datos de demostración
-└── tests/               # 129 pruebas automatizadas
+└── tests/               # 178 pruebas automatizadas
 ```
 
 ## Instalación y ejecución local
@@ -89,7 +93,7 @@ Documentación interactiva: `http://127.0.0.1:8000/docs`. Para ver el sistema co
 
 1. Entra a [render.com](https://render.com) con tu cuenta de GitHub.
 2. **New → Blueprint** y elige este repositorio. Render lee `render.yaml` y crea el servicio `ats-backend` (plan gratis, región Virginia, la misma zona de AWS que la base en Neon).
-3. Cuando lo pida, pega en `DATABASE_URL` la cadena de conexión de Neon, tu correo en `ADMIN_EMAIL`, el remitente verificado en Brevo en `EMAIL_FROM`, la clave de Brevo en `BREVO_API_KEY` y, si vas a usar IA, la clave en `AI_API_KEY` (puedes dejarla vacía). `EMAIL_BACKEND` ya viene en `brevo`, `AI_PROVIDER` y `AI_MODEL` con `gemini` y `gemini-3.8-flash`, y `SECRET_KEY` la genera Render sola.
+3. Cuando lo pida, pega en `DATABASE_URL` la cadena de conexión de Neon, tu correo en `ADMIN_EMAIL`, el remitente verificado en Brevo en `EMAIL_FROM`, la clave de Brevo en `BREVO_API_KEY` y, si vas a usar IA, la clave en `AI_API_KEY` (puedes dejarla vacía). `EMAIL_BACKEND` ya viene en `brevo`, `AI_PROVIDER` y `AI_MODEL` con `groq` y `openai/gpt-oss-20b`, y `SECRET_KEY` la genera Render sola.
 4. Al terminar el despliegue, abre `https://<tu-servicio>.onrender.com/docs`.
 5. Cuando el front esté publicado, cambia `ALLOWED_ORIGINS` a su URL en **Environment**.
 
