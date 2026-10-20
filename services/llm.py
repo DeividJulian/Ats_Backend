@@ -1,7 +1,7 @@
 """Provider-independent client for the language model, with schema-validated (structured) outputs.
 
 Environment variables:
-  AI_PROVIDER  gemini | groq | anthropic (default gemini)
+  AI_PROVIDER  groq | gemini | anthropic (default groq)
   AI_API_KEY   API key of that provider (required to use the AI features)
   AI_MODEL     optional model override (each provider has a default)
   AI_BASE_URL  optional endpoint override (each provider has a default)
@@ -54,7 +54,7 @@ PROVIDERS = {
     "groq": Provider("Groq", "openai/gpt-oss-20b", "https://api.groq.com/openai/v1"),
     "anthropic": Provider("Claude (Anthropic)", "claude-opus-5-5", None),
 }
-DEFAULT_PROVIDER = "gemini"
+DEFAULT_PROVIDER = "groq"
 
 T = TypeVar("T", bound=BaseModel)
 

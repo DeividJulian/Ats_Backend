@@ -36,10 +36,14 @@ def provider(monkeypatch):
     return state
 
 
-def test_gemini_is_the_default_provider(client, provider, monkeypatch):
+def test_groq_is_the_default_provider(client, provider, monkeypatch):
     monkeypatch.delenv("AI_PROVIDER")
     body = client.get("/ai/status").json()
-    assert body == {"configured": True, "provider": "gemini", "model": "gemini-3.8-flash"}
+    assert body == {"configured": True, "provider": "groq", "model": "openai/gpt-oss-20b"}
+
+
+def test_status_reports_gemini_when_chosen(client, provider):
+    assert client.get("/ai/status").json() == {"configured": True, "provider": "gemini", "model": "gemini-3.8-flash"}
 
 
 def test_evaluate_with_gemini(client, demo_data, provider):

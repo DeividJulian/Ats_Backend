@@ -15,13 +15,13 @@ services:
         value: "*"
       - key: ALLOW_DATA_RESET
         value: "false"
-      # Optional language model: Gemini by default (free tier); the key is entered in Render, never in the repo
+      # Optional language model: Groq (free tier, fast); the key is entered in Render, never in the repo
       - key: AI_PROVIDER
-        value: gemini
+        value: groq
       - key: AI_API_KEY
         sync: false
       - key: AI_MODEL
-        value: gemini-3.8-flash
+        value: openai/gpt-oss-20b
       # Signs the session tokens and the codes; Render generates a random value once
       - key: SECRET_KEY
         generateValue: true

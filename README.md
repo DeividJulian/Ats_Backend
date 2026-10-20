@@ -13,7 +13,7 @@ Proyecto final de Programación Orientada a la Web — Universidad Cooperativa d
 - SQLAlchemy 2 + PostgreSQL en [Neon](https://neon.com) (psycopg v3)
 - Pydantic v2 para validación
 - pypdf para leer hojas de vida en PDF
-- Modelo de lenguaje opcional e intercambiable: Gemini o Groq (por su endpoint compatible con OpenAI, vía httpx2) o Claude (SDK oficial de Anthropic)
+- Modelo de lenguaje opcional e intercambiable: Groq o Gemini (por su endpoint compatible con OpenAI, vía httpx2) o Claude (SDK oficial de Anthropic)
 - pytest para pruebas
 - Despliegue en [Render](https://render.com)
 
@@ -38,7 +38,7 @@ El código y la API (rutas y campos JSON) están en inglés. Los mensajes de err
 │   ├── scoring.py       # Puntaje de ajuste explicable
 │   ├── matching.py      # Une base de datos y puntaje
 │   ├── insights.py      # Resumen del perfil, guía de entrevista y formación sugerida
-│   ├── llm.py           # Cliente de IA independiente del proveedor (Gemini, Groq o Claude) con salidas estructuradas
+│   ├── llm.py           # Cliente de IA independiente del proveedor (Groq, Gemini o Claude) con salidas estructuradas
 │   ├── ai.py            # Evaluación, extracción de perfil y redacción de vacantes con IA
 │   ├── privacy.py       # Oculta nombre, correo y teléfono antes de enviar texto a la IA
 │   ├── resume.py        # Lectura y análisis de hojas de vida en PDF
@@ -73,9 +73,9 @@ Crea un archivo `.env` copiando `.env.example`:
 | `BREVO_API_KEY` | Clave de la API de Brevo (Settings → SMTP & API → API Keys) |
 | `CODIGO_MINUTOS` / `CODIGO_INTENTOS` / `CODIGO_ESPERA_SEGUNDOS` | Vigencia del código (10), intentos permitidos (5) y espera entre envíos (30) |
 | `ADMIN_EMAIL` | Primer administrador: se crea al arrancar si no existe y entra con el código que le llega a ese correo (debe ser real) |
-| `AI_PROVIDER` | Proveedor de IA: `gemini` (por defecto), `groq` o `anthropic` |
+| `AI_PROVIDER` | Proveedor de IA: `groq` (por defecto), `gemini` o `anthropic` |
 | `AI_API_KEY` | Clave de ese proveedor. Opcional: sin ella los endpoints `/ai` responden 503 y todo lo demás funciona |
-| `AI_MODEL` | Opcional. Modelo a usar (por defecto `gemini-3.8-flash`, `openai/gpt-oss-20b` en Groq o `claude-opus-5-5` en Anthropic) |
+| `AI_MODEL` | Opcional. Modelo a usar (por defecto `openai/gpt-oss-20b` en Groq, `gemini-3.8-flash` en Gemini o `claude-opus-5-5` en Anthropic) |
 | `AI_FALLBACK_MODEL` | Opcional. Modelo más liviano que responde cuando el principal está saturado (503), sin cuota gratis (429) o tarda más de 15 segundos. En Gemini es `gemini-flash-lite-latest` por defecto; `none` lo desactiva |
 | `AI_BASE_URL` | Opcional. Otra dirección para el endpoint (por defecto la oficial de cada proveedor) |
 
@@ -146,11 +146,11 @@ Clasificación: `high` (≥ 75), `medium` (≥ 50), `low` (< 50).
 
 Protecciones: las respuestas usan salidas estructuradas (el modelo solo puede devolver el formato esperado y además se validan); la hoja de vida se trata como datos y no como instrucciones, para que nadie escriba "califícame con 100"; se prohíbe usar rasgos protegidos y al modelo nunca le llegan el nombre, el correo ni el teléfono del candidato (se reemplazan por `[candidato]`, `[correo]` y `[teléfono]`, incluso dentro del texto de la hoja de vida). Sin clave, `/ai` responde 503; si se alcanza el límite de uso del proveedor, 429; si el proveedor falla o tarda más de 30 s, 502. Nunca inventa resultados.
 
-#### Obtener una clave gratuita de Gemini
+#### Obtener una clave gratuita de Groq
 
-1. Entra a [Google AI Studio](https://aistudio.google.com) con tu cuenta de Google.
-2. Haz clic en **Get API key** y crea una clave. El nivel gratuito no pide tarjeta; sus límites por minuto y por día se ven en AI Studio.
-3. Ponla en `AI_API_KEY` (en tu `.env` local y en Render → **Environment**). Nunca la subas al repositorio.
+1. Entra a [console.groq.com](https://console.groq.com) con tu cuenta de Google.
+2. En **API Keys** crea una clave. El nivel gratuito no pide tarjeta y responde en uno o dos segundos.
+3. Ponla en `AI_API_KEY` (en tu `.env` local y en Render → **Environment**) junto con `AI_PROVIDER=groq`. Nunca la subas al repositorio.
 
 #### Cambiar de proveedor
 
@@ -158,8 +158,8 @@ Solo cambian las variables, no el código:
 
 | Proveedor | `AI_PROVIDER` | `AI_MODEL` por defecto | Clave |
 |---|---|---|---|
-| Google Gemini | `gemini` | `gemini-3.8-flash` | [aistudio.google.com](https://aistudio.google.com) |
-| Groq | `groq` | `openai/gpt-oss-20b` | [console.groq.com](https://console.groq.com) |
+| Groq (por defecto) | `groq` | `openai/gpt-oss-20b` | [console.groq.com](https://console.groq.com) |
+| Google Gemini | `gemini` | `gemini-3.8-flash` (respaldo `gemini-flash-lite-latest`) | [aistudio.google.com](https://aistudio.google.com) |
 | Anthropic | `anthropic` | `claude-opus-5-5` | [platform.claude.com](https://platform.claude.com) (de pago) |
 
 `GET /ai/status` responde `configured`, `provider` y `model`. Por compatibilidad, si solo existe `ANTHROPIC_API_KEY` se usa Anthropic como antes.
