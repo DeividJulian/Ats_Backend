@@ -31,7 +31,7 @@ class User(Base):
     last_login = Column(DateTime(timezone=True), nullable=True)
 
     candidate = relationship("Candidate")
-    codes = relationship("VerificationCode", cascade="all, delete-orphan", passive_deletes=True)
+    codes = relationship("VerificationCode", cascade="all, delete-orphan")
 
 
 class VerificationCode(Base):

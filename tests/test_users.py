@@ -1,32 +1,46 @@
-from tests.conftest import login
+from tests.conftest import last_code, login
 
-RECRUITER = {"name": "Laura Gómez", "email": "laura@empresa.com", "password": "Laura1234", "role": "recruiter"}
+RECRUITER = {"name": "Laura Gómez", "email": "laura@empresa.com", "role": "recruiter"}
 
 
 def test_admin_creates_staff_accounts(client):
     r = client.post("/users", json=RECRUITER)
     assert r.status_code == 201 and r.json()["role"] == "recruiter"
+    # Not usable until that person enters with the code sent to their email
+    assert r.json()["verified"] is False
     assert client.post("/users", json=RECRUITER).status_code == 409
-    login(RECRUITER["email"], RECRUITER["password"])
+    assert login(RECRUITER["email"]).get("/auth/me").json()["verified"] is True
 
 
 def test_admin_cannot_create_candidates_directly(client):
     assert client.post("/users", json={**RECRUITER, "role": "candidate"}).status_code == 422
 
 
+def test_staff_accounts_no_longer_take_passwords(client):
+    user = client.post("/users", json={**RECRUITER, "password": "Laura1234"}).json()
+    assert "password" not in user and "password_hash" not in user
+
+
 def test_deactivated_user_cannot_log_in_or_use_old_tokens(client, anon):
     user = client.post("/users", json=RECRUITER).json()
-    session = login(RECRUITER["email"], RECRUITER["password"])
+    session = login(RECRUITER["email"])
     assert client.patch(f"/users/{user['id']}", json={"is_active": False}).json()["is_active"] is False
     assert session.get("/jobs").status_code == 403
-    r = anon.post("/auth/login", json={"email": RECRUITER["email"], "password": RECRUITER["password"]})
-    assert r.status_code == 403
+    assert anon.post("/auth/login", json={"email": RECRUITER["email"]}).status_code == 403
 
 
-def test_change_role_and_password(client):
+def test_deactivated_user_cannot_finish_a_login_started_before(client, anon):
     user = client.post("/users", json=RECRUITER).json()
-    client.patch(f"/users/{user['id']}", json={"role": "admin", "password": "NuevaClave1"})
-    assert login(RECRUITER["email"], "NuevaClave1").get("/users").status_code == 200
+    anon.post("/auth/login", json={"email": RECRUITER["email"]})
+    code = last_code(RECRUITER["email"])
+    client.patch(f"/users/{user['id']}", json={"is_active": False})
+    assert anon.post("/auth/verify", json={"email": RECRUITER["email"], "code": code}).status_code == 403
+
+
+def test_change_role(client):
+    user = client.post("/users", json=RECRUITER).json()
+    client.patch(f"/users/{user['id']}", json={"role": "admin"})
+    assert login(RECRUITER["email"]).get("/users").status_code == 200
 
 
 def test_admin_cannot_lock_themselves_out(client, admin_id):
@@ -41,3 +55,14 @@ def test_deleting_a_candidate_account_keeps_the_profile(client, demo_data):
     assert client.delete(f"/users/{candidate_user['id']}").status_code == 200
     assert client.get(f"/candidates/{candidate_user['candidate_id']}").status_code == 200
     assert client.delete("/users/999").status_code == 404
+
+
+def test_deleting_a_user_also_deletes_their_codes(client, anon):
+    user = client.post("/users", json=RECRUITER).json()
+    anon.post("/auth/login", json={"email": RECRUITER["email"]})
+    assert client.delete(f"/users/{user['id']}").status_code == 200
+    from database import SessionLocal
+    from models.user import VerificationCode
+
+    with SessionLocal() as db:
+        assert db.query(VerificationCode).count() == 0

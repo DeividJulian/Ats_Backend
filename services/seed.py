@@ -5,10 +5,9 @@ from sqlalchemy.orm import Session
 from models.application import Application
 from models.candidate import Candidate
 from models.job import Job
-from models.user import User
+from models.user import User, VerificationCode
 from services.matching import evaluate, system_corpus
 from services.profile import extract_education_level, extract_experience_years
-from services.security import hash_password
 from services.skills import extract_skills
 
 JOBS = [
@@ -68,11 +67,12 @@ APPLICATIONS = [
 ]
 
 
-# Accounts to try the app (shown on the login page). Admins are never created here: they come from ADMIN_EMAIL
-DEMO_PASSWORD = "Demo1234"
+# Accounts to try the app. Their emails are fake, so no code can reach them: they enter through
+# POST /auth/demo, only when ALLOW_DEMO_LOGIN=true. Admins are never created here: they come from ADMIN_EMAIL
 DEMO_RECRUITER = ("Reclutador Demo", "reclutador@demo.com")
 # The first demo candidate (Camila Ortega) also gets an account to try the candidate portal
 DEMO_CANDIDATE_INDEX = 0
+DEMO_CANDIDATE_EMAIL = CANDIDATES[DEMO_CANDIDATE_INDEX][1]
 
 
 def has_data(db: Session) -> bool:
@@ -81,6 +81,8 @@ def has_data(db: Session) -> bool:
 
 def delete_all(db: Session) -> None:
     """Deletes all ATS data and every non-admin account. Admin accounts are kept."""
+    others = db.query(User.id).filter(User.role != "admin")
+    db.query(VerificationCode).filter(VerificationCode.user_id.in_(others.scalar_subquery())).delete(synchronize_session=False)
     db.query(User).filter(User.role != "admin").delete()
     for model in (Application, Candidate, Job):
         db.query(model).delete()
@@ -126,9 +128,9 @@ def load_demo_data(db: Session) -> dict:
 
     demo_candidate = candidates[DEMO_CANDIDATE_INDEX]
     accounts = [
-        User(name=DEMO_RECRUITER[0], email=DEMO_RECRUITER[1], password_hash=hash_password(DEMO_PASSWORD), role="recruiter"),
-        User(name=demo_candidate.name, email=demo_candidate.email, password_hash=hash_password(DEMO_PASSWORD),
-             role="candidate", candidate_id=demo_candidate.id),
+        User(name=DEMO_RECRUITER[0], email=DEMO_RECRUITER[1], role="recruiter", verified=True),
+        User(name=demo_candidate.name, email=demo_candidate.email, role="candidate", candidate_id=demo_candidate.id,
+             verified=True),
     ]
     # An account with the same email may already exist (for example an admin): it is left untouched
     existing = {email for (email,) in db.query(User.email).all()}
@@ -139,5 +141,4 @@ def load_demo_data(db: Session) -> dict:
         "candidates": len(candidates),
         "applications": len(APPLICATIONS),
         "demo_accounts": [{"email": a.email, "role": a.role} for a in accounts],
-        "demo_password": DEMO_PASSWORD,
     }

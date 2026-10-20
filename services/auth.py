@@ -19,7 +19,8 @@ def get_current_user(
         raise HTTPException(status_code=401, detail="Debes iniciar sesión", headers={"WWW-Authenticate": "Bearer"})
     user_id = decode_token(credentials.credentials)
     user = db.get(User, user_id) if user_id is not None else None
-    if user is None:
+    # An account that never entered its first code can't be used yet
+    if user is None or not user.verified:
         raise HTTPException(
             status_code=401, detail="La sesión no es válida o expiró; inicia sesión de nuevo",
             headers={"WWW-Authenticate": "Bearer"},

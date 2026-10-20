@@ -6,7 +6,6 @@ from database import get_db
 from models.user import User
 from schemas.auth import StaffUserCreate, UserOut, UserUpdate
 from services.auth import admin_only
-from services.security import hash_password
 
 router = APIRouter(prefix="/users", tags=["Usuarios"])
 
@@ -27,7 +26,8 @@ def list_users(db: Session = Depends(get_db), _: User = Depends(admin_only)):
 def create_user(data: StaffUserCreate, db: Session = Depends(get_db), _: User = Depends(admin_only)):
     if db.query(User).filter(func.lower(User.email) == data.email.lower()).first():
         raise HTTPException(status_code=409, detail="Ya existe una cuenta con ese correo")
-    user = User(name=data.name, email=data.email.lower(), password_hash=hash_password(data.password), role=data.role)
+    # Unverified until the person enters with the code sent to that email
+    user = User(name=data.name, email=data.email.lower(), role=data.role)
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -36,7 +36,7 @@ def create_user(data: StaffUserCreate, db: Session = Depends(get_db), _: User = 
 
 @router.patch("/{user_id}", response_model=UserOut, summary="Actualizar usuario")
 def update_user(user_id: int, data: UserUpdate, db: Session = Depends(get_db), me: User = Depends(admin_only)):
-    """Cambia nombre, rol, contraseña o activa/desactiva. Un administrador no puede quitarse permisos a sí mismo."""
+    """Cambia nombre, rol o activa/desactiva. Un administrador no puede quitarse permisos a sí mismo."""
     user = get_user_or_404(db, user_id)
     if user.id == me.id and (data.is_active is False or (data.role and data.role != "admin")):
         raise HTTPException(status_code=409, detail="No puedes desactivarte ni quitarte el rol de administrador")
@@ -48,8 +48,6 @@ def update_user(user_id: int, data: UserUpdate, db: Session = Depends(get_db), m
         user.role = data.role
     if data.is_active is not None:
         user.is_active = data.is_active
-    if data.password is not None:
-        user.password_hash = hash_password(data.password)
     db.commit()
     db.refresh(user)
     return user

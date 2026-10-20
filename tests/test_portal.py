@@ -1,21 +1,17 @@
 import pytest
-from fastapi.testclient import TestClient
 
-from main import app
-from services.seed import DEMO_PASSWORD
-from tests.conftest import login, make_pdf
+from tests.conftest import login, make_pdf, register
 
 
 @pytest.fixture
 def camila(demo_data):
     """Demo candidate: Camila Ortega (candidate 1), already applied to job 1."""
-    return login("camila.ortega@example.com", DEMO_PASSWORD)
+    return login("camila.ortega@example.com")
 
 
 @pytest.fixture
-def newcomer(anon):
-    r = anon.post("/auth/register", json={"name": "Juan Pérez", "email": "juan@mail.com", "password": "Clave1234"})
-    return TestClient(app, headers={"Authorization": f"Bearer {r.json()['access_token']}"})
+def newcomer():
+    return register("Juan Pérez", "juan@mail.com")
 
 
 def test_my_applications_hide_the_score(camila):

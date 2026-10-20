@@ -5,20 +5,38 @@ from pydantic import BaseModel, ConfigDict, EmailStr, StringConstraints
 
 from schemas.candidate import Name
 
-Password = Annotated[str, StringConstraints(min_length=8, max_length=128)]
+Code = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^\d{6}$")]
 Role = Literal["admin", "recruiter", "candidate"]
+
+
+class RegisterInput(BaseModel):
+    """Open sign-up, only for candidates."""
+
+    name: Name
+    email: EmailStr
+    phone: Annotated[str, StringConstraints(strip_whitespace=True, max_length=30)] | None = None
 
 
 class LoginInput(BaseModel):
     email: EmailStr
-    password: Annotated[str, StringConstraints(min_length=1, max_length=128)]
 
 
-class RegisterInput(BaseModel):
-    name: Name
+class VerifyInput(BaseModel):
     email: EmailStr
-    password: Password
-    phone: Annotated[str, StringConstraints(strip_whitespace=True, max_length=30)] | None = None
+    code: Code
+
+
+class DemoLoginInput(BaseModel):
+    account: Literal["recruiter", "candidate"]
+
+
+class CodeSent(BaseModel):
+    message: str
+    email: str
+
+
+class AuthOptions(BaseModel):
+    demo_login: bool
 
 
 class UserOut(BaseModel):
@@ -30,7 +48,9 @@ class UserOut(BaseModel):
     role: Role
     candidate_id: int | None
     is_active: bool
+    verified: bool
     created_at: datetime
+    last_login: datetime | None
 
 
 class TokenOut(BaseModel):
@@ -40,11 +60,10 @@ class TokenOut(BaseModel):
 
 
 class StaffUserCreate(BaseModel):
-    """Admins create staff accounts; candidates sign up by themselves."""
+    """Admins create staff accounts; they enter with a code sent to that email."""
 
     name: Name
     email: EmailStr
-    password: Password
     role: Literal["admin", "recruiter"]
 
 
@@ -52,4 +71,3 @@ class UserUpdate(BaseModel):
     name: Name | None = None
     role: Literal["admin", "recruiter"] | None = None
     is_active: bool | None = None
-    password: Password | None = None
