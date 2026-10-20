@@ -66,8 +66,14 @@ Crea un archivo `.env` copiando `.env.example`:
 | `DATABASE_URL` | Cadena de conexión de PostgreSQL. Se puede pegar tal cual la que da Neon (`postgresql://...`). Para pruebas rápidas también sirve SQLite: `sqlite:///./ats.db` |
 | `ALLOWED_ORIGINS` | Orígenes que pueden llamar a la API, separados por comas (la URL del front). `*` permite todos |
 | `ALLOW_DATA_RESET` | `true` permite `POST /seed?reset=true`, que **borra todos los datos**. Déjalo en `false` en producción |
-| `JWT_SECRET` | Clave para firmar las sesiones (32 caracteres o más). Si falta, se genera una temporal y las sesiones se cierran al reiniciar |
-| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Primer administrador: se crea al arrancar si no existe |
+| `SECRET_KEY` | Clave para firmar las sesiones y los códigos (32 caracteres o más). También se acepta el nombre viejo `JWT_SECRET`. Si falta, se genera una temporal y las sesiones se cierran al reiniciar |
+| `TOKEN_HORAS` | Duración de la sesión en horas (por defecto 12) |
+| `EMAIL_BACKEND` | Cómo se envían los códigos: `consola` (local, el código sale en la terminal), `memoria` (pruebas), `smtp` o `brevo` (producción) |
+| `EMAIL_FROM` / `EMAIL_FROM_NAME` | Remitente de los correos. Con Brevo debe ser un remitente verificado en tu cuenta |
+| `BREVO_API_KEY` | Clave de la API de Brevo (Settings → SMTP & API → API Keys) |
+| `CODIGO_MINUTOS` / `CODIGO_INTENTOS` / `CODIGO_ESPERA_SEGUNDOS` | Vigencia del código (10), intentos permitidos (5) y espera entre envíos (30) |
+| `ALLOW_DEMO_LOGIN` | `true` deja entrar sin código a las dos cuentas de demostración (sus correos son falsos). Solo para mostrar el proyecto |
+| `ADMIN_EMAIL` | Primer administrador: se crea al arrancar si no existe y entra con el código que le llega a ese correo (debe ser real) |
 | `AI_PROVIDER` | Proveedor de IA: `gemini` (por defecto), `groq` o `anthropic` |
 | `AI_API_KEY` | Clave de ese proveedor. Opcional: sin ella los endpoints `/ai` responden 503 y todo lo demás funciona |
 | `AI_MODEL` | Opcional. Modelo a usar (por defecto `gemini-3.8-flash`, `openai/gpt-oss-20b` en Groq o `claude-opus-5-5` en Anthropic) |
@@ -83,7 +89,7 @@ Documentación interactiva: `http://127.0.0.1:8000/docs`. Para ver el sistema co
 
 1. Entra a [render.com](https://render.com) con tu cuenta de GitHub.
 2. **New → Blueprint** y elige este repositorio. Render lee `render.yaml` y crea el servicio `ats-backend` (plan gratis, región Virginia, la misma zona de AWS que la base en Neon).
-3. Cuando lo pida, pega en `DATABASE_URL` la cadena de conexión de Neon, el correo y la contraseña del primer administrador en `ADMIN_EMAIL` y `ADMIN_PASSWORD` y, si vas a usar IA, la clave en `AI_API_KEY` (puedes dejarla vacía). `AI_PROVIDER` y `AI_MODEL` ya vienen con `gemini` y `gemini-3.8-flash`. `JWT_SECRET` lo genera Render solo.
+3. Cuando lo pida, pega en `DATABASE_URL` la cadena de conexión de Neon, tu correo en `ADMIN_EMAIL`, el remitente verificado en Brevo en `EMAIL_FROM`, la clave de Brevo en `BREVO_API_KEY` y, si vas a usar IA, la clave en `AI_API_KEY` (puedes dejarla vacía). `EMAIL_BACKEND` ya viene en `brevo`, `AI_PROVIDER` y `AI_MODEL` con `gemini` y `gemini-3.8-flash`, y `SECRET_KEY` la genera Render sola.
 4. Al terminar el despliegue, abre `https://<tu-servicio>.onrender.com/docs`.
 5. Cuando el front esté publicado, cambia `ALLOWED_ORIGINS` a su URL en **Environment**.
 
@@ -91,7 +97,18 @@ En el plan gratis el servicio se duerme tras 15 minutos sin tráfico y la primer
 
 ## Usuarios y roles
 
-Las peticiones llevan el token de sesión en la cabecera `Authorization: Bearer <token>`, que se obtiene en `POST /auth/login` y dura 12 horas. Las contraseñas se guardan cifradas con scrypt.
+### Inicio de sesión sin contraseña
+
+1. `POST /auth/register {name, email, phone?}` crea la cuenta de candidato sin verificar y envía un código de 6 dígitos (201). Si la cuenta ya está verificada responde 409; si existe sin verificar, reenvía el código. Si un reclutador ya había creado el perfil con ese correo, se vincula a la cuenta (el código demuestra que el correo es suyo).
+2. `POST /auth/login {email}` envía un código nuevo; si no hay cuenta responde 404.
+3. `POST /auth/verify {email, code}` valida el código y devuelve `{access_token, user}`. La primera vez marca la cuenta como verificada.
+4. Las demás peticiones llevan `Authorization: Bearer <token>` (JWT HS256, dura `TOKEN_HORAS`). `GET /auth/me` devuelve el usuario actual.
+
+Reglas del código: se genera con `secrets`, se guarda solo su HMAC-SHA256 (nunca en texto plano), vence en 10 minutos, sirve una sola vez, admite 5 intentos, exige 30 segundos entre envíos (429) y un código nuevo anula los anteriores. Si el correo no sale responde 502 y no queda nada guardado. Sin token, con un token vencido o inválido, o con una cuenta sin verificar, la API responde 401.
+
+Los correos se envían con [Brevo](https://www.brevo.com) por su API HTTP (gratis, 300 correos al día), porque el plan gratis de Render bloquea los puertos SMTP. En local, con `EMAIL_BACKEND=consola`, el código aparece en la terminal.
+
+Si ya tenías una base en Neon de la versión con contraseña, al arrancar se agregan las columnas nuevas sin borrar nada (`migrate_auth.py`, que también se puede ejecutar a mano con `python migrate_auth.py`). Las cuentas que ya existían quedan verificadas.
 
 | Rol | Qué puede hacer |
 |---|---|
@@ -99,7 +116,9 @@ Las peticiones llevan el token de sesión en la cabecera `Authorization: Bearer 
 | `recruiter` | Vacantes, candidatos, postulaciones, ranking, estadísticas e IA |
 | `candidate` | Se registra solo, ve las vacantes abiertas, se postula, sube su hoja de vida y sigue sus postulaciones (sin ver el puntaje) |
 
-`POST /seed` crea dos cuentas de prueba con la contraseña `Demo1234`: `reclutador@demo.com` (reclutador) y `camila.ortega@example.com` (candidata). Los administradores solo se crean con `ADMIN_EMAIL` / `ADMIN_PASSWORD` o desde `POST /users`.
+Los candidatos se registran solos. Las cuentas de reclutador y administrador las crea un administrador desde `POST /users` (sin contraseña: la persona entra con el código que le llega). El primer administrador sale de `ADMIN_EMAIL`. Cada candidato ve y modifica solo su perfil y sus postulaciones; las vacantes y los candidatos los comparte todo el equipo de selección.
+
+`POST /seed` crea dos cuentas de prueba: `reclutador@demo.com` (reclutador) y `camila.ortega@example.com` (candidata). Como sus correos son falsos, entran con `POST /auth/demo` solo si `ALLOW_DEMO_LOGIN=true`.
 
 ## Cómo funciona la IA
 
@@ -158,7 +177,7 @@ Solo cambian las variables, no el código:
 | IA con modelo de lenguaje | `GET /ai/status`, `POST /ai/evaluate/{application_id}`, `POST /ai/extract-resume`, `POST /ai/draft-job` |
 | NLP | `POST /nlp/analyze-text`, `POST /nlp/similarity` |
 | Análisis | `GET /stats` |
-| Autenticación | `POST /auth/login`, `POST /auth/register` (candidatos), `GET /auth/me` |
+| Autenticación | `POST /auth/register` (candidatos), `POST /auth/login`, `POST /auth/verify`, `GET /auth/me`, `GET /auth/options`, `POST /auth/demo` |
 | Usuarios (admin) | `GET /users`, `POST /users`, `PATCH /users/{id}`, `DELETE /users/{id}` |
 | Portal del candidato | `GET/PUT /me/profile`, `POST /me/resume`, `GET /me/insights`, `GET /me/recommended-jobs`, `GET/POST /me/applications`, `DELETE /me/applications/{id}` |
 | Público (sin sesión) | `GET /public/jobs`, `GET /public/jobs/{id}`, `GET /public/summary` |
