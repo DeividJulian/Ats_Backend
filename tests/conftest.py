@@ -8,7 +8,7 @@ os.environ["SECRET_KEY"] = "test-secret-for-pytest-only-0123456789abcdef"
 os.environ["EMAIL_BACKEND"] = "memoria"
 os.environ["CODIGO_ESPERA_SEGUNDOS"] = "0"
 # Tests never call a real AI provider: blank values win over a developer's .env (load_dotenv doesn't override)
-for _name in ("AI_PROVIDER", "AI_API_KEY", "AI_MODEL", "AI_BASE_URL", "AI_FALLBACK_MODEL", "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL"):
+for _name in ("AI_PROVIDER", "AI_API_KEY", "AI_MODEL", "AI_BASE_URL", "AI_FALLBACK_MODEL"):
     os.environ[_name] = ""
 
 import re

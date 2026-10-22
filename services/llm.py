@@ -1,15 +1,12 @@
 """Provider-independent client for the language model, with schema-validated (structured) outputs.
 
 Environment variables:
-  AI_PROVIDER  groq | gemini | anthropic (default groq)
+  AI_PROVIDER  groq | gemini (default groq)
   AI_API_KEY   API key of that provider (required to use the AI features)
   AI_MODEL     optional model override (each provider has a default)
   AI_BASE_URL  optional endpoint override (each provider has a default)
   AI_FALLBACK_MODEL  lighter model used when the main one is busy, out of quota or too slow
                (Gemini: gemini-flash-lite-latest by default; "none" turns it off)
-
-Compatibility: with ANTHROPIC_API_KEY set and no AI_API_KEY, Anthropic is used as before
-(ANTHROPIC_MODEL still works as the model override).
 """
 import copy
 import dataclasses
@@ -20,7 +17,6 @@ import time
 from dataclasses import dataclass
 from typing import Any, TypeVar
 
-import anthropic
 import httpx2
 from pydantic import BaseModel, ValidationError
 
@@ -31,8 +27,6 @@ TIMEOUT_SECONDS = 30
 PRIMARY_TIMEOUT_SECONDS = 15
 RETRYABLE_STATUS = {500, 502, 503, 504}
 RETRY_DELAY_SECONDS = 1.5
-# If a safety classifier declines a request, the API re-runs it on a recommended fallback model
-FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
 
 @dataclass(frozen=True)
@@ -44,7 +38,7 @@ class Provider:
     default_fallback: str | None = None
 
 
-# Gemini and Groq are called through their OpenAI-compatible endpoints (POST {base_url}/chat/completions)
+# Both are called through their OpenAI-compatible endpoints (POST {base_url}/chat/completions)
 PROVIDERS = {
     # gemini-flash-lite-latest is an alias Google keeps pointing to its current lite model, with a larger free quota
     "gemini": Provider(
@@ -52,13 +46,11 @@ PROVIDERS = {
         "gemini-flash-lite-latest",
     ),
     "groq": Provider("Groq", "openai/gpt-oss-20b", "https://api.groq.com/openai/v1"),
-    "anthropic": Provider("Claude (Anthropic)", "claude-opus-5-5", None),
 }
 DEFAULT_PROVIDER = "groq"
 
 T = TypeVar("T", bound=BaseModel)
 
-_client: anthropic.Anthropic | None = None
 _http: httpx2.Client | None = None
 
 
@@ -115,11 +107,6 @@ class AIConfig:
 def current_config() -> AIConfig:
     """Reads the environment on every call, so a change of variables needs no code change."""
     api_key = (os.getenv("AI_API_KEY") or "").strip()
-    legacy_key = (os.getenv("ANTHROPIC_API_KEY") or "").strip()
-    if not api_key and legacy_key:
-        model = os.getenv("AI_MODEL") or os.getenv("ANTHROPIC_MODEL") or PROVIDERS["anthropic"].default_model
-        return AIConfig("anthropic", legacy_key, model, None)
-
     provider = (os.getenv("AI_PROVIDER") or DEFAULT_PROVIDER).strip().lower()
     spec = PROVIDERS.get(provider)
     model = os.getenv("AI_MODEL") or (spec.default_model if spec else "")
@@ -148,41 +135,6 @@ def _check(config: AIConfig) -> None:
         raise LLMNotConfigured(f"AI_PROVIDER no es válido: usa uno de {', '.join(PROVIDERS)}")
     if not config.api_key:
         raise LLMNotConfigured("falta AI_API_KEY en el servidor")
-
-
-def get_client(api_key: str) -> anthropic.Anthropic:
-    global _client
-    if _client is None:
-        _client = anthropic.Anthropic(api_key=api_key, timeout=TIMEOUT_SECONDS, max_retries=1)
-    return _client
-
-
-def _generate_anthropic(config: AIConfig, system: str, user: str, output_type: type[T], effort: str) -> T:
-    try:
-        response = get_client(config.api_key).beta.messages.parse(
-            model=config.model,
-            max_tokens=16000,
-            system=system,
-            messages=[{"role": "user", "content": user}],
-            output_format=output_type,
-            output_config={"effort": effort},
-            betas=[FALLBACK_BETA],
-            fallbacks="default",
-        )
-    except anthropic.APIStatusError as e:
-        raise _status_error(config, e.status_code, e.response.headers.get("retry-after")) from e
-    except anthropic.APITimeoutError as e:
-        raise LLMError(f"{_label(config)} tardó demasiado en responder. Intenta de nuevo.") from e
-    except anthropic.APIConnectionError as e:
-        raise LLMError(f"No se pudo contactar a {_label(config)}") from e
-    except ValidationError as e:
-        raise LLMError("La IA no devolvió una respuesta válida") from e
-
-    if response.stop_reason == "refusal":
-        raise LLMError("La IA declinó procesar este contenido")
-    if response.parsed_output is None:
-        raise LLMError("La IA no devolvió una respuesta válida")
-    return response.parsed_output
 
 
 def strict_schema(output_type: type[BaseModel]) -> dict[str, Any]:
@@ -265,13 +217,10 @@ def _generate_openai_compatible(
         raise LLMError("La IA no devolvió una respuesta válida") from e
 
 
-def generate(system: str, user: str, output_type: type[T], effort: str = "medium") -> T:
-    """Asks the model for an answer that must match output_type's schema, and returns it validated.
-    effort only applies to Anthropic models."""
+def generate(system: str, user: str, output_type: type[T]) -> T:
+    """Asks the model for an answer that must match output_type's schema, and returns it validated."""
     config = current_config()
     _check(config)
-    if config.provider == "anthropic":
-        return _generate_anthropic(config, system, user, output_type, effort)
     if not config.fallback_model:
         return _generate_openai_compatible(config, system, user, output_type)
     # One try with the main model; if it is busy, out of quota or slow, the lighter model answers instead

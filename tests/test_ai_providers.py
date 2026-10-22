@@ -5,7 +5,14 @@ import httpx2
 import pytest
 
 from services import llm
-from tests.test_ai_claude import EVALUATION
+
+EVALUATION = {
+    "summary": "Buen ajuste técnico para el cargo.",
+    "strengths": ["Experiencia con FastAPI", "Uso diario de Docker"],
+    "gaps": [],
+    "recommendation": "advance",
+    "interview_questions": ["¿Qué API construyó?", "¿Cómo despliega con Docker?", "¿Cómo prueba su código?"],
+}
 
 
 @pytest.fixture
@@ -222,11 +229,6 @@ def test_unknown_provider_is_not_configured(client, provider, monkeypatch):
     assert r.status_code == 503 and "AI_PROVIDER" in r.json()["detail"]
 
 
-def test_legacy_anthropic_key_still_works(client, monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "legacy-key")
-    assert client.get("/ai/status").json() == {"configured": True, "provider": "anthropic", "model": "claude-opus-5-5"}
-
-
 # ---------- Each provider: endpoint and headers ----------
 
 def test_gemini_endpoint_and_headers(client, demo_data, provider):
@@ -261,32 +263,6 @@ def test_model_and_base_url_can_be_overridden(client, provider, monkeypatch):
     assert sent["url"] == "https://proxy.example.com/v1/chat/completions"
     assert sent["body"]["model"] == "gemini-3.5-flash-lite"
     assert client.get("/ai/status").json()["model"] == "gemini-3.5-flash-lite"
-
-
-def test_anthropic_endpoint_and_headers(client, demo_data, monkeypatch):
-    import anthropic
-
-    seen = {}
-
-    def handler(request: httpx2.Request) -> httpx2.Response:
-        seen.update(url=str(request.url), headers=request.headers, body=json.loads(request.content))
-        return httpx2.Response(200, json={
-            "id": "msg_test", "type": "message", "role": "assistant", "model": "claude-opus-5-5",
-            "content": [{"type": "text", "text": json.dumps(EVALUATION)}],
-            "stop_reason": "end_turn", "stop_sequence": None, "usage": {"input_tokens": 1, "output_tokens": 1},
-        })
-
-    monkeypatch.setenv("AI_PROVIDER", "anthropic")
-    monkeypatch.setenv("AI_API_KEY", "anthropic-test-key")
-    monkeypatch.setattr(llm, "_client", anthropic.Anthropic(
-        api_key="anthropic-test-key", max_retries=0,
-        http_client=anthropic.DefaultHttpxClient(transport=httpx2.MockTransport(handler)),
-    ))
-    assert client.post("/ai/evaluate/1").status_code == 200
-    assert seen["url"].startswith("https://api.anthropic.com/v1/messages")
-    assert seen["headers"]["x-api-key"] == "anthropic-test-key"
-    assert "anthropic-version" in seen["headers"]
-    assert seen["body"]["model"] == "claude-opus-5-5"
 
 
 # ---------- Privacy ----------

@@ -80,7 +80,7 @@ def evaluate_candidate(job: dict, candidate: dict, match: dict, identity: dict |
         f"Inferred skills: {', '.join(match.get('inferred_skills', {})) or 'none'}. "
         f"Missing skills: {', '.join(match.get('missing_skills', [])) or 'none'}."
     )
-    result = llm.generate(system, user, _Evaluation, effort="medium")
+    result = llm.generate(system, user, _Evaluation)
     return {
         "summary": result.summary.strip(),
         "strengths": _clean_list(result.strengths, 6),
@@ -92,7 +92,7 @@ def evaluate_candidate(job: dict, candidate: dict, match: dict, identity: dict |
 
 def extract_resume_profile(text: str) -> dict:
     system = "You extract structured data from a resume. If a value is not present, use null, 0 or an empty list. " + COMMON_RULES
-    result = llm.generate(system, f"<resume>\n{redact_resume(text)}\n</resume>", _ResumeProfile, effort="low")
+    result = llm.generate(system, f"<resume>\n{redact_resume(text)}\n</resume>", _ResumeProfile)
     return {
         "skills": canonicalize_skills(_clean_list(result.skills, 40)),
         "experience_years": _clamp(result.experience_years, 0, 45),
@@ -105,7 +105,7 @@ def draft_job(title: str, notes: str) -> dict:
     system = (
         "You write clear, concrete job postings for a small business, free of discriminatory language. " + COMMON_RULES
     )
-    result = llm.generate(system, f"Job title: {title}\n<notes>\n{notes}\n</notes>", _JobDraft, effort="low")
+    result = llm.generate(system, f"Job title: {title}\n<notes>\n{notes}\n</notes>", _JobDraft)
     return {
         "description": result.description.strip(),
         "requirements": result.requirements.strip(),

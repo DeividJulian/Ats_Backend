@@ -1,6 +1,6 @@
 # Portal ATS para pymes — Backend
 
-API que permite publicar vacantes, registrar candidatos y **ordenarlos automáticamente según su ajuste al cargo** usando procesamiento de lenguaje natural (NLP) implementado desde cero. Opcionalmente, un modelo de lenguaje (Groq por defecto, gratis; también Gemini o Claude) redacta evaluaciones, extrae perfiles y propone vacantes.
+API que permite publicar vacantes, registrar candidatos y **ordenarlos automáticamente según su ajuste al cargo** usando procesamiento de lenguaje natural (NLP) implementado desde cero. Opcionalmente, un modelo de lenguaje (Groq por defecto, gratis; también Gemini) redacta evaluaciones, extrae perfiles y propone vacantes.
 
 - **Frontend:** https://github.com/DeividJulian/Ats_Front (Angular) · https://ats-front-six.vercel.app
 - **API desplegada:** https://ats-backend-xtp7.onrender.com
@@ -13,7 +13,7 @@ Proyecto final de Programación Orientada a la Web — Universidad Cooperativa d
 - SQLAlchemy 2 + PostgreSQL en [Neon](https://neon.com) (psycopg v3)
 - Pydantic v2 para validación
 - pypdf para leer hojas de vida en PDF
-- Modelo de lenguaje opcional e intercambiable: Groq o Gemini (por su endpoint compatible con OpenAI, vía httpx2) o Claude (SDK oficial de Anthropic)
+- Modelo de lenguaje opcional e intercambiable: Groq o Gemini, por su endpoint compatible con OpenAI (vía httpx2)
 - pytest para pruebas
 - Despliegue en [Render](https://render.com)
 
@@ -40,7 +40,7 @@ El código y la API (rutas y campos JSON) están en inglés. Los mensajes de err
 │   ├── scoring.py       # Puntaje de ajuste explicable
 │   ├── matching.py      # Une base de datos y puntaje
 │   ├── insights.py      # Resumen del perfil, guía de entrevista y formación sugerida
-│   ├── llm.py           # Cliente de IA independiente del proveedor (Groq, Gemini o Claude) con salidas estructuradas
+│   ├── llm.py           # Cliente de IA independiente del proveedor (Groq o Gemini) con salidas estructuradas
 │   ├── ai.py            # Evaluación, extracción de perfil y redacción de vacantes con IA
 │   ├── privacy.py       # Oculta nombre, correo y teléfono antes de enviar texto a la IA
 │   ├── resume.py        # Lectura y análisis de hojas de vida en PDF
@@ -77,9 +77,9 @@ Crea un archivo `.env` copiando `.env.example`:
 | `BREVO_API_KEY` | Clave de la API de Brevo (Settings → SMTP & API → API Keys) |
 | `CODIGO_MINUTOS` / `CODIGO_INTENTOS` / `CODIGO_ESPERA_SEGUNDOS` | Vigencia del código (10), intentos permitidos (5) y espera entre envíos (30) |
 | `ADMIN_EMAIL` | Primer administrador: se crea al arrancar si no existe y entra con el código que le llega a ese correo (debe ser real) |
-| `AI_PROVIDER` | Proveedor de IA: `groq` (por defecto), `gemini` o `anthropic` |
+| `AI_PROVIDER` | Proveedor de IA: `groq` (por defecto) o `gemini` |
 | `AI_API_KEY` | Clave de ese proveedor. Opcional: sin ella los endpoints `/ai` responden 503 y todo lo demás funciona |
-| `AI_MODEL` | Opcional. Modelo a usar (por defecto `openai/gpt-oss-20b` en Groq, `gemini-3.8-flash` en Gemini o `claude-opus-5-5` en Anthropic) |
+| `AI_MODEL` | Opcional. Modelo a usar (por defecto `openai/gpt-oss-20b` en Groq o `gemini-3.8-flash` en Gemini) |
 | `AI_FALLBACK_MODEL` | Opcional. Modelo más liviano que responde cuando el principal está saturado (503), sin cuota gratis (429) o tarda más de 15 segundos. En Gemini es `gemini-flash-lite-latest` por defecto; `none` lo desactiva |
 | `AI_BASE_URL` | Opcional. Otra dirección para el endpoint (por defecto la oficial de cada proveedor) |
 
@@ -164,9 +164,8 @@ Solo cambian las variables, no el código:
 |---|---|---|---|
 | Groq (por defecto) | `groq` | `openai/gpt-oss-20b` | [console.groq.com](https://console.groq.com) |
 | Google Gemini | `gemini` | `gemini-3.8-flash` (respaldo `gemini-flash-lite-latest`) | [aistudio.google.com](https://aistudio.google.com) |
-| Anthropic | `anthropic` | `claude-opus-5-5` | [platform.claude.com](https://platform.claude.com) (de pago) |
 
-`GET /ai/status` responde `configured`, `provider` y `model`. Por compatibilidad, si solo existe `ANTHROPIC_API_KEY` se usa Anthropic como antes.
+`GET /ai/status` responde `configured`, `provider` y `model`.
 
 ## Endpoints
 
