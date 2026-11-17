@@ -5,8 +5,10 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models.candidate import Candidate
 from models.user import User
-from schemas.auth import CodeSent, LoginInput, RegisterInput, TokenOut, UserOut, VerifyInput
+import config
+from schemas.auth import CodeSent, DemoLoginInput, DemoStatus, LoginInput, RegisterInput, TokenOut, UserOut, VerifyInput
 from services.auth import get_current_user
+from services import demo
 from services.codes import (
     CodeCooldown,
     InvalidCode,
@@ -27,8 +29,15 @@ def token_for(user: User) -> TokenOut:
     return TokenOut(access_token=create_token(user.id, user.role), user=UserOut.model_validate(user))
 
 
+DEMO_ONLY_PASSWORD = "Es una cuenta demo: entra con su contraseña"
+
+
 def _send_new_code(db: Session, user: User, purpose: str) -> None:
     """Creates and emails the code. If the email doesn't go out, everything is undone (no half-made account)."""
+    if demo.is_demo_email(user.email):
+        # Those inboxes are not ours: they never get an email
+        db.rollback()
+        raise HTTPException(status_code=409, detail=DEMO_ONLY_PASSWORD)
     try:
         code = issue_code(db, user, purpose)
     except CodeCooldown as e:
@@ -50,6 +59,8 @@ def register(data: RegisterInput, db: Session = Depends(get_db)):
     earlier by a recruiter with the same email is linked: the code proves the email belongs to them.
     """
     email = normalize_email(data.email)
+    if demo.is_demo_email(email):
+        raise HTTPException(status_code=409, detail=DEMO_ONLY_PASSWORD)
     user = find_user(db, email)
     if user and user.verified:
         raise HTTPException(status_code=409, detail="Ya existe una cuenta con ese correo: inicia sesión")
@@ -100,6 +111,27 @@ def verify(data: VerifyInput, db: Session = Depends(get_db)):
     except InvalidCode as e:
         db.commit()  # keeps the failed attempt or the invalidated code
         raise HTTPException(status_code=400, detail=str(e))
+    finish_login(user)
+    db.commit()
+    db.refresh(user)
+    return token_for(user)
+
+
+@router.get("/demo", response_model=DemoStatus, summary="¿Está activo el acceso demo?")
+def demo_status():
+    return DemoStatus(enabled=config.DEMO_LOGIN)
+
+
+@router.post("/demo-login", response_model=TokenOut, summary="Entrar con una cuenta demo")
+def demo_login(data: DemoLoginInput, db: Session = Depends(get_db)):
+    """Only the demo accounts, only with DEMO_LOGIN=true. Everyone else enters with the emailed code."""
+    if not config.DEMO_LOGIN:
+        raise HTTPException(status_code=404, detail="El acceso demo está desactivado")
+    if not demo.is_demo_email(data.email) or not demo.password_matches(data.password):
+        raise HTTPException(status_code=401, detail="Correo o contraseña de la cuenta demo incorrectos")
+    user = demo.get_or_create_demo_user(db, data.email)
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Tu usuario está desactivado")
     finish_login(user)
     db.commit()
     db.refresh(user)

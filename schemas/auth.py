@@ -45,6 +45,15 @@ class UserOut(BaseModel):
     last_login: datetime | None
 
 
+class DemoLoginInput(BaseModel):
+    email: EmailStr
+    password: Annotated[str, StringConstraints(max_length=100)]
+
+
+class DemoStatus(BaseModel):
+    enabled: bool
+
+
 class TokenOut(BaseModel):
     access_token: str
     token_type: Literal["bearer"] = "bearer"

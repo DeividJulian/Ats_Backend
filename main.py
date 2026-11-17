@@ -17,6 +17,7 @@ from database import Base, SessionLocal, engine
 from errors import http_message, validation_message
 from migrate_auth import upgrade_auth_schema
 from services.bootstrap import ensure_admin
+from services.demo import ensure_demo_accounts
 
 logging.basicConfig(
     level=logging.INFO,
@@ -31,6 +32,7 @@ upgrade_auth_schema(engine)
 
 with SessionLocal() as db:
     ensure_admin(db)
+    ensure_demo_accounts(db)
 
 app = FastAPI(title="Portal ATS para pymes", version="1.0.0")
 
