@@ -1,6 +1,6 @@
 """Demo accounts that enter with a shared password, for presentations.
 
-Only usable with DEMO_LOGIN=true. Their Gmail inboxes are not ours, so they never receive emails:
+Always available unless DEMO_LOGIN=false. Their Gmail inboxes are not ours, so they never receive emails:
 the code login refuses them and they always enter with the password.
 """
 import hmac

@@ -12,7 +12,7 @@ def demo_on(monkeypatch):
     monkeypatch.setattr(config, "DEMO_LOGIN", True)
 
 
-def test_demo_is_off_by_default(anon):
+def test_demo_can_be_turned_off(anon):
     assert anon.get("/auth/demo").json() == {"enabled": False}
     r = anon.post("/auth/demo-login", json=ADMIN)
     assert r.status_code == 404 and "desactivado" in r.json()["detail"]

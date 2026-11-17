@@ -32,5 +32,5 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 
-# Demo accounts with a shared password (services/demo.py). Off unless turned on explicitly.
-DEMO_LOGIN = os.getenv("DEMO_LOGIN", "false").strip().lower() in ("1", "true", "yes", "si", "sí")
+# Demo accounts with a shared password (services/demo.py). On by default; DEMO_LOGIN=false turns them off.
+DEMO_LOGIN = os.getenv("DEMO_LOGIN", "true").strip().lower() in ("1", "true", "yes", "si", "sí")
