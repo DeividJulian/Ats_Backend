@@ -98,8 +98,9 @@ def test_seed_creates_no_accounts(client, demo_data):
     assert [u["email"] for u in client.get("/users").json()] == [ADMIN["email"]]
 
 
-def test_there_is_no_demo_login(anon, demo_data):
-    assert anon.post("/auth/demo", json={"account": "recruiter"}).status_code == 404
+def test_there_is_no_passwordless_demo_login(anon, demo_data):
+    # The old one-click demo entry is gone; demo accounts need their password (tests/test_demo_login.py)
+    assert anon.post("/auth/demo", json={"account": "recruiter"}).status_code in (404, 405)
     assert anon.get("/auth/options").status_code == 404
 
 
