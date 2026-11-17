@@ -77,6 +77,7 @@ Crea un archivo `.env` copiando `.env.example`:
 | `BREVO_API_KEY` | Clave de la API de Brevo (Settings → SMTP & API → API Keys) |
 | `CODIGO_MINUTOS` / `CODIGO_INTENTOS` / `CODIGO_ESPERA_SEGUNDOS` | Vigencia del código (10), intentos permitidos (5) y espera entre envíos (30) |
 | `ADMIN_EMAIL` | Primer administrador: se crea al arrancar si no existe y entra con el código que le llega a ese correo (debe ser real) |
+| `DEMO_LOGIN` | `true` activa las cuentas demo con contraseña (ver [Cuentas demo](#cuentas-demo)); `false` por defecto |
 | `AI_PROVIDER` | Proveedor de IA: `groq` (por defecto) o `gemini` |
 | `AI_API_KEY` | Clave de ese proveedor. Opcional: sin ella los endpoints `/ai` responden 503 y todo lo demás funciona |
 | `AI_MODEL` | Opcional. Modelo a usar (por defecto `openai/gpt-oss-20b` en Groq o `gemini-3.8-flash` en Gemini) |
@@ -123,6 +124,20 @@ Si ya tenías una base en Neon de la versión con contraseña, al arrancar se ag
 Los candidatos se registran solos. Las cuentas de reclutador y administrador las crea un administrador desde `POST /users` (sin contraseña: la persona entra con el código que le llega). El primer administrador sale de `ADMIN_EMAIL`. Cada candidato ve y modifica solo su perfil y sus postulaciones; las vacantes y los candidatos los comparte todo el equipo de selección.
 
 `POST /seed` carga vacantes, candidatos y postulaciones de ejemplo, pero no crea cuentas: todas entran con un código enviado a un correo real.
+
+### Cuentas demo
+
+Para presentar el sistema sin esperar códigos hay dos cuentas que entran con contraseña:
+
+| Correo | Contraseña | Rol |
+|---|---|---|
+| `administrador@gmail.com` | `demo 123` | Administrador |
+| `usuario@gmail.com` | `demo 123` | Candidato |
+
+- Solo funcionan con `DEMO_LOGIN=true`. En el login aparece el enlace **"Entrar con una cuenta demo"**.
+- Se crean solas al arrancar (o la primera vez que entran). Endpoints: `GET /auth/demo` (si está activo) y `POST /auth/demo-login` con `{"email", "password"}`.
+- Esos buzones no son nuestros: nunca reciben correos. Pedir un código o registrarse con ellos responde 409.
+- **Ojo:** la contraseña está publicada aquí, así que cualquiera puede entrar como administrador mientras esté activo. Enciéndelo solo para presentar y vuelve a poner `DEMO_LOGIN=false` después.
 
 ## Cómo funciona la IA
 

@@ -46,3 +46,6 @@ services:
       # First administrator, created on startup if it doesn't exist; enters with the code sent to that email
       - key: ADMIN_EMAIL
         sync: false
+      # Demo accounts with a password (see README); turn on only for presentations
+      - key: DEMO_LOGIN
+        value: "false"
