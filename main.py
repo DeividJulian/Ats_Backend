@@ -4,16 +4,18 @@ import os
 import pkgutil
 import time
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import models  # noqa: F401  (registers every table)
 import routers
-from database import Base, SessionLocal, engine
+from database import Base, SessionLocal, engine, get_db
 from errors import http_message, validation_message
 from migrate_auth import upgrade_auth_schema
 from services.bootstrap import ensure_admin
@@ -99,6 +101,17 @@ def root():
     return {"message": "API del Portal ATS funcionando"}
 
 
-@app.get("/health", tags=["Sistema"], summary="Estado del servicio")
-def health():
+@app.get(
+    "/health",
+    tags=["Sistema"],
+    summary="Estado del servicio",
+    responses={503: {"description": "La base de datos no responde"}},
+)
+def health(db: Session = Depends(get_db)):
+    """Para el monitoreo: comprueba la conexión con la base de datos. Es pública y no devuelve datos."""
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception as exc:  # a health check must never answer an uncontrolled 500
+        logger.error("Health check: the database is not responding", exc_info=exc)
+        return JSONResponse(status_code=503, content={"status": "error"})
     return {"status": "ok"}
